@@ -1,0 +1,277 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------------
+   Baul design tokens — dark, cosmic, soft (spec §6), warmed by wood-and-brass
+   heirloom accents. Accent pair branches by vault type via data attribute.
+--------------------------------------------------------------------------- */
+:root {
+  --night: #17130f;
+  --night-2: #251e18;
+  --wood-raised: #32261c;
+  --starlight: #f8f0df;
+  --dim: rgba(235, 224, 205, 0.72);
+  --brass: #b88b43;
+  --brass-2: #e0bf78;
+  --parchment: #f1e5ce;
+  --ink: #241d14;
+  --capiz: #d8e5dc;
+  --danger: #d47783;
+  --success: #9ac9a5;
+  --surface: #241c15;
+  --surface-raised: #2d2219;
+  --line: rgba(224, 191, 120, 0.16);
+  --radius-sm: 0.75rem;
+  --radius-md: 1.1rem;
+  --radius-lg: 1.5rem;
+  --elevation-raised: 0 20px 60px rgba(0, 0, 0, 0.28);
+  --accent-a: #b88b43;
+  --accent-b: #e0bf78;
+}
+
+[data-vault-theme="intimate"] {
+  --accent-a: #b85f74;
+  --accent-b: #d5a362;
+}
+
+[data-vault-theme="circle"] {
+  --accent-a: #7ca092;
+  --accent-b: #c3a35f;
+}
+
+@theme inline {
+  /* Extra-small breakpoint for the narrowest phones (default set starts at sm=40rem). */
+  --breakpoint-xs: 30rem;
+  --color-night: var(--night);
+  --color-night-2: var(--night-2);
+  --color-starlight: var(--starlight);
+  --color-dim: var(--dim);
+  --color-brass: var(--brass);
+  --color-brass-2: var(--brass-2);
+  --color-parchment: var(--parchment);
+  --color-ink: var(--ink);
+  --color-accent-a: var(--accent-a);
+  --color-accent-b: var(--accent-b);
+  --font-display: var(--font-fraunces), Georgia, serif;
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+  min-width: 320px;
+}
+
+body {
+  background:
+    radial-gradient(circle at 80% -10%, rgba(184, 139, 67, 0.1), transparent 34rem),
+    repeating-linear-gradient(90deg, transparent 0 11px, rgba(255, 255, 255, 0.012) 12px),
+    var(--night);
+  color: var(--starlight);
+  font-family: var(--font-inter), system-ui, sans-serif;
+  line-height: 1.5;
+  overflow-x: hidden;
+}
+
+/* iOS zooms the page in when a focused input's text is under 16px. Force a
+   16px floor on touch screens so tapping a field never yanks the layout. */
+@media (max-width: 640px) {
+  body {
+    background:
+      radial-gradient(circle at 90% -5%, rgba(184, 139, 67, 0.09), transparent 22rem),
+      repeating-linear-gradient(90deg, transparent 0 17px, rgba(255, 255, 255, 0.01) 18px),
+      var(--night);
+  }
+
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
+/* Respect the home-indicator / notch on fixed bottom bars. */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* The landing globe must yield vertical swipes to the page scroller. react-
+   three-fiber sets inline `touch-action: auto`, which OrbitControls cancels via
+   preventDefault — trapping touch users on the hero. !important beats the inline
+   style; pan-y keeps vertical = scroll while horizontal still spins the globe. */
+.globe-canvas canvas {
+  touch-action: pan-y !important;
+}
+
+/* Glassmorphism surface (spec §6): translucent, blurred, 1px white/10 border.
+   Declared in the components layer so a Tailwind bg-/border- utility on the
+   SAME element (e.g. an active card's bg-brass/15, or a menu's solid bg-night-2)
+   overrides the glass defaults instead of losing to this unlayered rule. */
+@layer components {
+  .glass {
+    background: linear-gradient(145deg, rgba(61, 45, 32, 0.94), rgba(35, 28, 22, 0.96));
+    border: 1px solid rgba(224, 191, 120, 0.16);
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.18);
+  }
+
+  .route-shell {
+    min-height: 100svh;
+    padding: max(1rem, env(safe-area-inset-top)) max(1rem, env(safe-area-inset-right)) max(1rem, env(safe-area-inset-bottom)) max(1rem, env(safe-area-inset-left));
+  }
+
+  .form-panel {
+    background: color-mix(in srgb, var(--surface) 96%, transparent);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.24);
+  }
+
+  .section-kicker {
+    color: var(--brass-2);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.19em;
+    text-transform: uppercase;
+  }
+
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+
+  @media (max-width: 640px) {
+    .glass {
+      background: rgba(43, 33, 24, 0.94);
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.15);
+    }
+
+    .form-panel {
+      border-radius: 1.15rem;
+      box-shadow: 0 14px 36px rgba(0, 0, 0, 0.18);
+    }
+  }
+}
+
+.accent-text {
+  background: linear-gradient(100deg, var(--accent-a), var(--accent-b));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.accent-fill {
+  background: linear-gradient(100deg, var(--accent-a), var(--accent-b));
+}
+
+/* Letters render on parchment — the heirloom inside the chest. */
+.parchment {
+  background:
+    radial-gradient(ellipse at 30% 20%, rgba(255, 255, 255, 0.35), transparent 55%),
+    var(--parchment);
+  color: var(--ink);
+  border: 1px solid color-mix(in srgb, var(--brass) 55%, transparent);
+}
+
+/* Vault-open moment: light spilling from a lifted chest lid. */
+@keyframes lid-light {
+  0% {
+    opacity: 0;
+    transform: scaleY(0.1);
+  }
+  55% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+    transform: scaleY(1.6);
+  }
+}
+
+.lid-light {
+  animation: lid-light 1.4s ease-out forwards;
+  transform-origin: bottom;
+  background: linear-gradient(to top, color-mix(in srgb, var(--accent-b) 45%, transparent), transparent 75%);
+  pointer-events: none;
+}
+
+@keyframes spin-slow {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.vinyl-spin {
+  animation: spin-slow 3.5s linear infinite;
+}
+
+@keyframes drift {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-60px);
+  }
+}
+
+@keyframes twinkle {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes heart-burst {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.45);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.heart-burst {
+  animation: heart-burst 0.35s ease-out;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent-a) 45%, transparent);
+}
+
+:focus-visible {
+  outline: 2px solid var(--brass-2);
+  outline-offset: 2px;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(224, 191, 120, 0.25);
+  border-radius: 999px;
+}
+
+/* Spec §6: always respect prefers-reduced-motion. */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
