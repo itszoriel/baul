@@ -48,6 +48,7 @@ debug.log
 
 # Supabase CLI runtime state
 /supabase/.temp
+/supabase/.branches
 
 # typescript
 *.tsbuildinfo

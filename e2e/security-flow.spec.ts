@@ -1,10 +1,26 @@
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
+import { randomBytes } from "node:crypto";
 
 const fullStack = process.env.E2E_FULL === "1";
 
+function testClientIp() {
+  const hex = randomBytes(6).toString("hex");
+  return `2001:db8:${hex.slice(0, 4)}:${hex.slice(4, 8)}:${hex.slice(8, 12)}::1`;
+}
+
 async function createAndJoin(page: Page, name: string, keeperName: string, phrase: string) {
-  const response = await page.request.post("/api/vaults", {
-    data: {
+  await page.context().setExtraHTTPHeaders({
+    "x-forwarded-for": testClientIp(),
+  });
+  await page.goto("/");
+  const response = await page.evaluate(async (data) => {
+    const result = await fetch("/api/vaults", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    return { ok: result.ok, body: await result.text() };
+  }, {
       name,
       maxMembers: 3,
       purpose: "friends",
@@ -12,14 +28,19 @@ async function createAndJoin(page: Page, name: string, keeperName: string, phras
       milestoneDate: null,
       countryId: null,
       divisionId: null,
-    },
   });
-  expect(response.ok(), await response.text()).toBeTruthy();
-  const created = await response.json() as { key: string; vaultId: string };
+  expect(response.ok, response.body).toBeTruthy();
+  const created = JSON.parse(response.body) as { key: string; vaultId: string };
 
   await page.goto("/enter");
-  await page.getByLabel("Your baul key").fill(created.key);
-  await page.getByRole("button", { name: "Open the baul" }).click();
+  const keyInput = page.getByLabel("Your baul key");
+  const openButton = page.getByRole("button", { name: "Open the baul" });
+  await expect(async () => {
+    await keyInput.fill("");
+    await keyInput.fill(created.key);
+    await expect(openButton).toBeEnabled({ timeout: 500 });
+  }).toPass({ timeout: 5_000 });
+  await openButton.click();
   await page.getByLabel("Display name").fill(keeperName);
   await page.getByPlaceholder(/Your passphrase/).fill(phrase);
   await page.getByPlaceholder("Type it again").fill(phrase);

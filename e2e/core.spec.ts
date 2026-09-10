@@ -10,6 +10,15 @@ for (const route of ["/", "/create", "/enter", "/recover", "/vaults", "/privacy"
       document.fonts.ready,
       new Promise((resolve) => window.setTimeout(resolve, 5_000)),
     ]));
+    // Avoid scanning a transient focus-color frame. Axe can otherwise
+    // misclassify the focused input's animated background as foreground text
+    // in WebKit even though the settled placeholder contrast is sufficient.
+    const focused = page.locator(":focus");
+    if (await focused.count()) {
+      await focused.evaluate((element) => Promise.all(
+        element.getAnimations().map((animation) => animation.finished.catch(() => undefined)),
+      ));
+    }
     const results = await new AxeBuilder({ page }).analyze();
     expect(results.violations.filter((violation) => ["serious", "critical"].includes(violation.impact ?? ""))).toEqual([]);
   });
@@ -36,7 +45,11 @@ test("legacy query keys are removed from browser history immediately", async ({ 
   await page.goto("/enter?key=VLT-abcd-EFGH-2345-6789");
   // WebKit's Playwright navigation cache may retain the pre-replaceState URL;
   // the document location is the privacy boundary that controls referrers.
-  await expect.poll(() => page.evaluate(() => window.location.href)).toBe("http://127.0.0.1:3000/enter");
+  await expect.poll(() => page.evaluate(() => ({
+    pathname: window.location.pathname,
+    search: window.location.search,
+    hash: window.location.hash,
+  }))).toEqual({ pathname: "/enter", search: "", hash: "" });
 });
 
 test("landing content and primary paths remain visible when client bundles fail", async ({ page }) => {

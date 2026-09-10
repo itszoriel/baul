@@ -10,7 +10,12 @@ export function proxy(request: NextRequest) {
   const secureTransport = forwardedProtocol
     ? forwardedProtocol === "https"
     : request.nextUrl.protocol === "https:";
-  const policy = buildContentSecurityPolicy({ nonce, development, secureTransport });
+  const policy = buildContentSecurityPolicy({
+    nonce,
+    development,
+    secureTransport,
+    supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
+  });
 
   const requestHeaders = new Headers(request.headers);
   if (nonce) requestHeaders.set("x-nonce", nonce);

@@ -57,6 +57,8 @@ export function MusicBar({
   meId,
   playRequest,
   onPlayRequestHandled,
+  onSongAdded,
+  onSongRemoved,
 }: {
   songs: Song[];
   members: Member[];
@@ -64,6 +66,8 @@ export function MusicBar({
   meId: string;
   playRequest: string | null;
   onPlayRequestHandled: () => void;
+  onSongAdded: (song: Song) => void;
+  onSongRemoved: (songId: string) => void;
 }) {
   const [index, setIndex] = useState(0);
   const [playback, dispatchPlayback] = useReducer(playbackReducer, initialPlaybackState);
@@ -183,7 +187,8 @@ export function MusicBar({
 
   async function removeSong(song: Song) {
     if (!confirm(`Take “${song.title}” out of the soundtrack?`)) return;
-    await supabaseBrowser().from("songs").delete().eq("id", song.id);
+    const { error } = await supabaseBrowser().from("songs").delete().eq("id", song.id);
+    if (!error) onSongRemoved(song.id);
   }
 
   return (
@@ -434,7 +439,13 @@ export function MusicBar({
         )}
       </AnimatePresence>
 
-      <AddSongModal open={addOpen} onClose={() => setAddOpen(false)} vaultId={vaultId} meId={meId} />
+      <AddSongModal
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        vaultId={vaultId}
+        meId={meId}
+        onSongAdded={onSongAdded}
+      />
     </>
   );
 }
@@ -614,11 +625,13 @@ function AddSongModal({
   onClose,
   vaultId,
   meId,
+  onSongAdded,
 }: {
   open: boolean;
   onClose: () => void;
   vaultId: string;
   meId: string;
+  onSongAdded: (song: Song) => void;
 }) {
   const [mode, setMode] = useState<"link" | "file">("link");
   const [title, setTitle] = useState("");
@@ -654,20 +667,28 @@ function AddSongModal({
             upsert: false,
           });
         if (uploadError) throw new Error("The MP3 could not be uploaded. Try again.");
-        await api("/api/media/song/complete", { uploadId: intent.uploadId });
+        const completed = await api<{ song: Song }>("/api/media/song/complete", {
+          uploadId: intent.uploadId,
+        });
+        onSongAdded(completed.song);
       } else {
         const link = url.trim();
         if (!link) throw new Error("Paste a link to the song.");
         if (classifySongUrl(link) === "unsupported") {
           throw new Error("That link can't play here — paste a YouTube link or a direct audio link, or upload an MP3.");
         }
-        const { error: insErr } = await supabaseBrowser().from("songs").insert({
-          vault_id: vaultId,
-          added_by: meId,
-          title: title.trim(),
-          source_url: link,
-        });
-        if (insErr) throw new Error("Could not add the song. Try again.");
+        const { data: song, error: insErr } = await supabaseBrowser()
+          .from("songs")
+          .insert({
+            vault_id: vaultId,
+            added_by: meId,
+            title: title.trim(),
+            source_url: link,
+          })
+          .select("id, vault_id, added_by, title, source_url, file_url, created_at")
+          .single();
+        if (insErr || !song) throw new Error("Could not add the song. Try again.");
+        onSongAdded(song);
       }
       setTitle("");
       setUrl("");

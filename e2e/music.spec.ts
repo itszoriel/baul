@@ -1,8 +1,14 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
+import { randomBytes } from "node:crypto";
 
 const fullStack = process.env.E2E_FULL === "1";
 const youtubeApiUrl = "https://www.youtube.com/iframe_api";
 const videoId = "dQw4w9WgXcQ";
+
+function testClientIp() {
+  const hex = randomBytes(6).toString("hex");
+  return `2001:db8:${hex.slice(0, 4)}:${hex.slice(4, 8)}:${hex.slice(8, 12)}::1`;
+}
 
 const youtubeStub = `
 window.YT = {
@@ -30,8 +36,18 @@ window.onYouTubeIframeAPIReady && window.onYouTubeIframeAPIReady();
 `;
 
 async function createAndJoin(page: Page) {
-  const response = await page.request.post("/api/vaults", {
-    data: {
+  await page.context().setExtraHTTPHeaders({
+    "x-forwarded-for": testClientIp(),
+  });
+  await page.goto("/");
+  const response = await page.evaluate(async (data) => {
+    const result = await fetch("/api/vaults", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    return { ok: result.ok, body: await result.text() };
+  }, {
       name: "Music test baul",
       maxMembers: 3,
       purpose: "friends",
@@ -39,14 +55,19 @@ async function createAndJoin(page: Page) {
       milestoneDate: null,
       countryId: null,
       divisionId: null,
-    },
   });
-  expect(response.ok(), await response.text()).toBeTruthy();
-  const created = await response.json() as { key: string; vaultId: string };
+  expect(response.ok, response.body).toBeTruthy();
+  const created = JSON.parse(response.body) as { key: string; vaultId: string };
 
   await page.goto("/enter");
-  await page.getByLabel("Your baul key").fill(created.key);
-  await page.getByRole("button", { name: "Open the baul" }).click();
+  const keyInput = page.getByLabel("Your baul key");
+  const openButton = page.getByRole("button", { name: "Open the baul" });
+  await expect(async () => {
+    await keyInput.fill("");
+    await keyInput.fill(created.key);
+    await expect(openButton).toBeEnabled({ timeout: 500 });
+  }).toPass({ timeout: 5_000 });
+  await openButton.click();
   await page.getByLabel("Display name").fill("Music Keeper");
   await page.getByPlaceholder(/Your passphrase/).fill("music keeper phrase");
   await page.getByPlaceholder("Type it again").fill("music keeper phrase");
@@ -62,7 +83,14 @@ async function addYouTubeSong(page: Page, title: string) {
   await page.getByLabel("Title").fill(title);
   await page.getByRole("button", { name: "Add song" }).click();
   await expect(page.getByRole("dialog")).toBeHidden();
-  await expect(playlist.getByRole("button", { name: new RegExp(title) })).toBeVisible();
+  await expect(songButton(playlist, title)).toBeVisible();
+}
+
+function songButton(playlist: ReturnType<Page["getByRole"]>, title: string) {
+  const escapedTitle = title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return playlist.getByRole("button", {
+    name: new RegExp(`^${escapedTitle} added(?: by .+)?$`),
+  });
 }
 
 async function fulfillYouTube(route: Route) {
@@ -86,9 +114,10 @@ test.describe("shared YouTube soundtrack", () => {
     await addYouTubeSong(page, "A deterministic YouTube song");
 
     await expect(page.getByRole("region", { name: /YouTube player for/i })).toHaveCount(0);
-    await page.getByRole("region", { name: "Soundtrack playlist" })
-      .getByRole("button", { name: /A deterministic YouTube song/ })
-      .click();
+    await songButton(
+      page.getByRole("region", { name: "Soundtrack playlist" }),
+      "A deterministic YouTube song",
+    ).click();
     await expect(page.getByText("Opening this song…")).toBeVisible();
     await expect(page.getByTitle("YouTube video player")).toBeVisible();
     await expect(page.getByRole("button", { name: "Pause", exact: true })).toBeVisible();
@@ -99,10 +128,10 @@ test.describe("shared YouTube soundtrack", () => {
     expect(box!.height).toBeGreaterThanOrEqual(200);
 
     await page.getByRole("button", { name: "Minimize the YouTube player while it keeps playing" }).click();
-    const compactBox = await page.getByTitle("YouTube video player").boundingBox();
-    expect(compactBox).not.toBeNull();
-    expect(compactBox!.width).toBeGreaterThanOrEqual(200);
-    expect(compactBox!.height).toBeGreaterThanOrEqual(200);
+    await expect.poll(async () => {
+      const compactBox = await page.getByTitle("YouTube video player").boundingBox();
+      return compactBox ? Math.min(compactBox.width, compactBox.height) : 0;
+    }).toBeGreaterThanOrEqual(200);
     await expect(page.getByRole("button", { name: "Pause", exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Restore the YouTube player" }).click();
 
@@ -135,9 +164,10 @@ test.describe("shared YouTube soundtrack", () => {
     });
     await createAndJoin(page);
     await addYouTubeSong(page, "A retryable YouTube song");
-    await page.getByRole("region", { name: "Soundtrack playlist" })
-      .getByRole("button", { name: /A retryable YouTube song/ })
-      .click();
+    await songButton(
+      page.getByRole("region", { name: "Soundtrack playlist" }),
+      "A retryable YouTube song",
+    ).click();
 
     await expect(page.getByText("The song stayed closed.")).toBeVisible();
     await expect(page.getByRole("link", { name: /Watch on YouTube/ })).toHaveAttribute(
@@ -174,7 +204,9 @@ test.describe("direct MP3 uploads", () => {
     await page.getByRole("button", { name: "Add song" }).click();
 
     await expect(page.getByRole("dialog")).toBeHidden();
-    await expect(page.getByRole("region", { name: "Soundtrack playlist" })
-      .getByRole("button", { name: /A large direct upload/ })).toBeVisible();
+    await expect(songButton(
+      page.getByRole("region", { name: "Soundtrack playlist" }),
+      "A large direct upload",
+    )).toBeVisible();
   });
 });

@@ -4,11 +4,32 @@ export function buildContentSecurityPolicy({
   nonce,
   development,
   secureTransport = true,
+  supabaseUrl,
 }: {
   nonce?: string;
   development: boolean;
   secureTransport?: boolean;
+  supabaseUrl?: string;
 }): string {
+  let supabaseOrigin: string | undefined;
+  let supabaseWebSocketOrigin: string | undefined;
+  if (supabaseUrl) {
+    try {
+      const parsed = new URL(supabaseUrl);
+      const loopback = parsed.hostname === "localhost"
+        || parsed.hostname === "127.0.0.1"
+        || parsed.hostname === "[::1]";
+      if (parsed.protocol === "https:" || (parsed.protocol === "http:" && loopback)) {
+        supabaseOrigin = parsed.origin;
+        supabaseWebSocketOrigin = `${parsed.protocol === "https:" ? "wss:" : "ws:"}//${parsed.host}`;
+      }
+    } catch {
+      // Invalid deployment configuration must not broaden the browser policy.
+    }
+  }
+  const storageSource = supabaseOrigin ? ` ${supabaseOrigin}` : "";
+  const realtimeSource = supabaseWebSocketOrigin ? ` ${supabaseWebSocketOrigin}` : "";
+
   // YouTube is the only third-party script origin. Production keeps the
   // nonce trust chain; the explicit host is a fallback for older CSP clients.
   const scriptSource = development
@@ -26,10 +47,10 @@ export function buildContentSecurityPolicy({
     scriptSource,
     "script-src-attr 'none'",
     styleSource,
-    "img-src 'self' data: blob: https://*.supabase.co https://i.ytimg.com",
+    `img-src 'self' data: blob: https://*.supabase.co${storageSource} https://i.ytimg.com`,
     "font-src 'self' data:",
-    "media-src 'self' blob: https:",
-    `connect-src 'self'${development ? " ws:" : ""} https://*.supabase.co wss://*.supabase.co https://www.youtube.com https://challenges.cloudflare.com https://*.ingest.sentry.io https://*.ingest.us.sentry.io`,
+    `media-src 'self' blob: https:${storageSource}`,
+    `connect-src 'self'${development ? " ws:" : ""} https://*.supabase.co wss://*.supabase.co${storageSource}${realtimeSource} https://www.youtube.com https://challenges.cloudflare.com https://*.ingest.sentry.io https://*.ingest.us.sentry.io`,
     "frame-src https://www.youtube.com https://www.youtube-nocookie.com https://challenges.cloudflare.com",
     "worker-src 'self' blob:",
     "manifest-src 'self'",

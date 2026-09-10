@@ -246,6 +246,10 @@ export default function VaultPage() {
         meId={me.id}
         playRequest={playRequest}
         onPlayRequestHandled={() => setPlayRequest(null)}
+        onSongAdded={(song) => setSongs((items) => (
+          items.some((item) => item.id === song.id) ? items : [...items, song]
+        ))}
+        onSongRemoved={(songId) => setSongs((items) => items.filter((item) => item.id !== songId))}
       />
     </div>
   );

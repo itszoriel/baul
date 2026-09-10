@@ -32,8 +32,23 @@ describe("content security policy", () => {
   });
 
   it("does not upgrade local HTTP subresources during production smoke tests", () => {
-    const policy = buildContentSecurityPolicy({ development: false, secureTransport: false });
+    const policy = buildContentSecurityPolicy({
+      development: false,
+      secureTransport: false,
+      supabaseUrl: "http://127.0.0.1:54321",
+    });
     expect(policy).not.toContain("upgrade-insecure-requests");
+    expect(policy).toContain("connect-src 'self' https://*.supabase.co wss://*.supabase.co http://127.0.0.1:54321 ws://127.0.0.1:54321");
+    expect(policy).toContain("img-src 'self' data: blob: https://*.supabase.co http://127.0.0.1:54321");
+    expect(policy).toContain("media-src 'self' blob: https: http://127.0.0.1:54321");
+  });
+
+  it("does not broaden the policy for an insecure remote Supabase URL", () => {
+    const policy = buildContentSecurityPolicy({
+      development: false,
+      supabaseUrl: "http://supabase.example.test:54321",
+    });
+    expect(policy).not.toContain("supabase.example.test");
   });
 
   it("classifies every private or token-bearing page for nonce rendering", () => {
