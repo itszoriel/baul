@@ -72,7 +72,7 @@ test("public metadata and shallow health endpoints expose no private state", asy
   expect(healthBody).toMatchObject({ status: "ok" });
   expect(JSON.stringify(healthBody)).not.toContain("SUPABASE_SECRET_KEY");
   expect(await robots.text()).toContain("Disallow: /vault");
-  expect(await sitemap.text()).toContain("https://baul.vercel.app/privacy");
+  expect(await sitemap.text()).toContain("http://localhost:3000/privacy");
 });
 
 test("landing and picker visual baselines", async ({ page }, testInfo) => {

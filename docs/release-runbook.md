@@ -21,6 +21,7 @@
    keep anonymous sign-ins enabled, require SSL, restrict direct database
    networks, enforce MFA for organization members, and rotate any legacy
    service-role key after the application uses a secret key.
+8. Confirm `NEXT_PUBLIC_APP_URL` exactly matches the assigned production origin, then inspect canonical metadata, `robots.txt`, `sitemap.xml`, invite URLs, and recovery links on the protected deployment.
 
 ## Rollout order
 

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Fraunces, Inter } from "next/font/google";
 import "./globals.css";
 import { BRAND } from "@/lib/copy";
+import { appUrl } from "@/lib/env";
 
 const fraunces = Fraunces({
   variable: "--font-fraunces",
@@ -14,7 +15,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "https://baul.vercel.app"),
+  metadataBase: new URL(appUrl()),
   title: "Baul — a private treasure chest for your memories",
   description: `${BRAND.pronunciation} A private, key-gated space where two people — or your whole circle — keep notes, photos, letters, and a shared soundtrack. ${BRAND.tagline}`,
   alternates: { canonical: "/" },
