@@ -285,7 +285,7 @@ export function MusicBar({
           className={cn(
             "fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] left-3 z-30 overflow-hidden border border-brass/30 bg-[#21170f] shadow-2xl shadow-black/60 transition-[width,border-radius] duration-200",
             youtubePanelCompact
-              ? "w-[200px] rounded-xl"
+              ? "w-[202px] rounded-xl"
               : "w-[calc(100vw-1.5rem)] max-w-[480px] rounded-2xl",
           )}
         >
@@ -336,6 +336,7 @@ export function MusicBar({
                 key={youtubeAttempt}
                 ref={youtubePlayerRef}
                 videoId={currentYtId}
+                compact={youtubePanelCompact}
                 shouldPlay={playback.desiredPlaying}
                 onReady={() => setYoutubeReady(true)}
                 onPlaying={() => dispatchPlayback({ type: "playing" })}
@@ -520,6 +521,7 @@ interface YouTubePlayerController {
 
 interface YouTubePlayerProps {
   videoId: string;
+  compact: boolean;
   shouldPlay: boolean;
   onReady: () => void;
   onPlaying: () => void;
@@ -531,6 +533,7 @@ interface YouTubePlayerProps {
 
 const YouTubePlayer = forwardRef<YouTubePlayerController, YouTubePlayerProps>(function YouTubePlayer({
   videoId,
+  compact,
   shouldPlay,
   onReady,
   onPlaying,
@@ -612,7 +615,10 @@ const YouTubePlayer = forwardRef<YouTubePlayerController, YouTubePlayerProps>(fu
   }, [videoId, shouldPlay, ready]);
 
   return (
-    <div className="aspect-video min-h-[200px] w-full bg-black">
+    <div
+      className="aspect-video min-h-[200px] w-full bg-black"
+      style={compact ? { width: 200, height: 200 } : undefined}
+    >
       <div ref={hostRef} className="size-full [&>div]:size-full [&_iframe]:size-full" />
     </div>
   );
