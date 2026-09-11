@@ -13,6 +13,7 @@ Updated 11 September 2026. The first release target is the protected, owner-only
 - Removed nested interactive elements, raised placeholder contrast, retained visible focus/focus trapping, and added Chromium/WebKit/mobile accessibility coverage.
 - Added nightly encrypted, deduplicated database and private-storage backups to a private R2 repository with seven daily/four weekly retention and a documented monthly restore drill.
 - Added exact Node 24 runtime declarations, production-mode Playwright, CI database/browser gates, third-party notices, and operational/release documentation.
+- Migrated the action-email template from the deprecated React Email component packages to the supported unified React Email 6 package, pinned the version, and added a markup-rendering regression test.
 - Located Vercel Functions in Sydney (`syd1`) beside the hosted Supabase project (`ap-southeast-2`) to avoid an unnecessary trans-Pacific round trip on API requests.
 
 ## Why these decisions
@@ -26,7 +27,7 @@ Updated 11 September 2026. The first release target is the protected, owner-only
 
 ## Verified in this workspace
 
-- `npm run check` passed under Node 24.19.0 and npm 11.6.3: ESLint, strict TypeScript, 29 Vitest tests, the 42-route Next.js optimized build, and the production dependency audit with zero reported vulnerabilities.
+- `npm run check` passed under Node 24.19.0 and npm 11.6.3: ESLint, strict TypeScript, 30 Vitest tests, the 42-route Next.js optimized build, and the production dependency audit with zero reported vulnerabilities.
 - The optimized application served successfully, with cacheable public pages, no-store sensitive/API pages, route-specific CSP, security headers, health output, robots directives, sitemap, public support address, and programmer attribution inspected over HTTP.
 - After a clean local database reset, production-mode Playwright passed 51 tests across Chromium, WebKit, and an iPhone profile. Three tests were intentionally skipped: the stateful membership scenario runs only once in Chromium, and WebKit is excluded from Chromium-reviewed pixel snapshots. Coverage includes creation, anonymous Auth, manual entry, one-time invitations, multi-Baul membership, reclaim/old-device denial, capsules, direct private MP3 upload, YouTube failure handling, axe checks, CSP, query-key removal, no-JavaScript fallbacks, metadata, health, and visual baselines.
 - Mobile Lighthouse measured performance 85, accessibility 100, best practices 100, SEO 100, CLS 0, LCP 3.99 s, FCP 0.79 s, and total blocking time 182 ms against the local optimized server. This is a lab result, not field performance.
@@ -34,13 +35,13 @@ Updated 11 September 2026. The first release target is the protected, owner-only
 - The hosted migration `20260909070958_production_media_uploads.sql` was applied after the successful restore drill. Hosted migration history is synchronized and hosted schema lint reports no errors or warnings.
 - The `storage-cleanup` Edge Function is active with a dedicated shared secret. Its Vault-backed `pg_cron` job is active every 15 minutes; an authenticated smoke invocation completed the one existing cleanup item with zero deferrals, leaving zero pending queue items.
 - Hosted Supabase now enforces SSL for direct database connections, keeps anonymous Auth enabled, disables email/password signup, uses the production Auth site URL, and reports no performance-advisor issues. The Data API is limited to `public` and `graphql_public`, with automatic exposure of new public objects disabled.
-- Git remote `origin` points to `https://github.com/itszoriel/baul`; `main` is pushed. GitHub Actions run `34493019634` passed the application, database, and browser jobs.
+- Git remote `origin` points to `https://github.com/itszoriel/baul`; `main` is pushed. GitHub Actions gates each push with application, database, and production-browser jobs; the exact run used for a release is recorded in the deployment handoff.
 - Vercel project `prince-98d5/baul-memories` is linked locally with Next.js and Node 24.x. Eleven core variables are configured for Production only; preview receives no production database credentials. Vercel Authentication protects all deployments, including the production domain, and Git-fork protection is enabled.
 - A read-only hosted-data inventory confirmed the accidental E2E incident created exactly four empty vault rows and no related members, memories, messages, songs, invites, or storage objects. They remain untouched pending an export and explicit cleanup confirmation.
 
 ## Release blockers and required operator work
 
-- Configure Sentry DSNs/project credentials, Turnstile keys/hostname, and the owner-only Resend variables in Vercel.
+- Configure Sentry DSNs/project credentials and Turnstile keys/hostname in Vercel. Create a Resend API key and add `RESEND_API_KEY`; the owner-only sender, reply-to address, and recipient allowlist are already configured.
 - Create a dedicated private R2 bucket and least-privilege credentials, configure the GitHub backup secrets, run the workflow manually, and complete a restore drill. Docker is now available, but the cloud backup credentials and production database URL have not been supplied or verified.
 - Grant the Vercel GitHub app access to `itszoriel/baul`; automatic Git connection currently fails even though CLI deployment and GitHub Actions work. Until then, deployments are manual.
 - Turn off the dormant hosted Twilio provider in the Supabase dashboard. Phone signup is already disabled, but the provider toggle cannot be cleared by the CLI. Confirm organization-member MFA in the dashboard.

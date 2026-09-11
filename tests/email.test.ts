@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { renderToStaticMarkup } from "react-dom/server";
+import KeyEmail from "@/emails/KeyEmail";
 import { sendActionEmail } from "@/lib/email";
 
 afterEach(() => {
@@ -26,5 +28,19 @@ describe("email failure behavior", () => {
       actionUrl: "https://example.test/invite/token",
       kind: "invite",
     })).resolves.toBe(false);
+  });
+});
+
+describe("action email template", () => {
+  it("renders the vault name, action, and destination", () => {
+    const html = renderToStaticMarkup(KeyEmail({
+      vaultName: "Test Baul",
+      actionUrl: "https://baul-memories.vercel.app/invite/example",
+      kind: "invite",
+    }));
+
+    expect(html).toContain("Test Baul");
+    expect(html).toContain("Accept invitation");
+    expect(html).toContain("https://baul-memories.vercel.app/invite/example");
   });
 });

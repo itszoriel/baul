@@ -27,7 +27,6 @@
     "npm": ">=11"
   },
   "dependencies": {
-    "@react-email/components": "^1.0.12",
     "@react-three/drei": "^10.7.8",
     "@react-three/fiber": "^9.7.0",
     "@sentry/nextjs": "10.73.0",
@@ -42,6 +41,7 @@
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "react-easy-crop": "^6.2.3",
+    "react-email": "6.9.5",
     "resend": "^6.17.2",
     "three": "^0.185.1",
     "three-globe": "^2.45.2",
