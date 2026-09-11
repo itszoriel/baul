@@ -77,7 +77,8 @@ const nextConfig: NextConfig = {
 };
 
 export default withSentryConfig(nextConfig, {
-  silent: true,
+  // Keep local output quiet while making hosted source-map failures visible.
+  silent: !process.env.CI,
   telemetry: false,
   sourcemaps: {
     disable: !process.env.SENTRY_AUTH_TOKEN,
