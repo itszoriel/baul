@@ -1,0 +1,6 @@
+.env
+.env.*
+output
+coverage
+playwright-report
+test-results
