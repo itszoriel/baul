@@ -107,11 +107,11 @@ Use `npm run test:e2e:update` only after deliberately reviewing visual changes. 
 
 ## Deployment
 
-The first target is a protected Vercel beta backed by the hosted Baul Project Supabase environment. Choose an available Vercel project hostname before configuring production; `baul.vercel.app` is already serving an unrelated deployment and must not be used unless ownership is proven.
+The first target is the owner-protected Vercel beta at `https://baul-memories.vercel.app`, backed by the hosted Baul Project Supabase environment. Vercel Authentication is configured for all deployments, including production, until the public-release gates are complete.
 
 1. Apply and validate migrations first.
-2. Configure all environment variables in Vercel, including `NEXT_PUBLIC_APP_URL=https://<assigned-project>.vercel.app`; keep preview and production secrets separate. Sitemap, robots, canonical metadata, email links, and invite links all follow this value.
-3. Enable Vercel Deployment Protection while the beta is limited to its owner.
+2. Configure all environment variables in Vercel, including `NEXT_PUBLIC_APP_URL=https://baul-memories.vercel.app`; keep preview and production secrets separate. Sitemap, robots, canonical metadata, email links, and invite links all follow this value.
+3. Keep Vercel Authentication on the `all` scope while the beta is limited to its owner.
 4. Keep Resend's sandbox sender and `EMAIL_RECIPIENT_ALLOWLIST=pauljohn.antigo@gmail.com` for the owner-only beta. Verify an owned sender domain before allowing other recipients. Configure Turnstile for the assigned hostname.
 5. Deploy `supabase/functions/storage-cleanup`, set its `CLEANUP_SECRET`, then run `supabase/production/configure-storage-cleanup.sql` with the same secret. Confirm both Supabase schedules are active.
 6. Configure the encrypted GitHub Actions backup to a dedicated private Cloudflare R2 bucket and complete a restore drill.
