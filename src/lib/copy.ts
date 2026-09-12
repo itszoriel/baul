@@ -11,6 +11,12 @@ export const BRAND = {
   pronunciation: "Baul (bah-ool) — a Filipino treasure chest.",
 };
 
+export const DEVELOPER = {
+  name: "Paul John E. Antigo",
+  handle: "itszoriel",
+  url: "https://github.com/itszoriel",
+} as const;
+
 export function memoryAddedLine(vaultType: VaultType, name: string): string {
   return vaultType === "intimate" ? "your person added a memory" : `${name} added to the board.`;
 }

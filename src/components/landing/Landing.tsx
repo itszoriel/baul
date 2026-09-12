@@ -7,7 +7,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { Logo, LogoWordmark } from "@/components/Logo";
 import { ButtonLink, Spinner, cn } from "@/components/ui";
-import { BRAND, COPY } from "@/lib/copy";
+import { BRAND, COPY, DEVELOPER } from "@/lib/copy";
 import { approximateCountryPoint } from "@/lib/globe";
 import type { CountryStat, RegionStat } from "@/lib/types";
 import { currentVaults } from "@/lib/vault-client";
@@ -307,7 +307,12 @@ export default function Landing({
       </Section>
 
       <footer className="border-t border-white/5 px-6 py-8 text-center text-xs text-dim/70">
-        <p>Designed and programmed by Paul John E. Antigo.</p>
+        <p>
+          Designed and programmed by{" "}
+          <a href={DEVELOPER.url} rel="me author" className="underline hover:text-starlight">
+            {DEVELOPER.name} ({DEVELOPER.handle})
+          </a>.
+        </p>
         <p className="mt-2 flex flex-wrap justify-center gap-x-3 gap-y-1">
           <Link href="/privacy" className="underline hover:text-starlight">Privacy</Link>
           <Link href="/terms" className="underline hover:text-starlight">Terms</Link>

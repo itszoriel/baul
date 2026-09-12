@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { LogoWordmark } from "@/components/Logo";
+import { DEVELOPER } from "@/lib/copy";
 
 export function PolicyPage({
   title,
@@ -24,7 +25,10 @@ export function PolicyPage({
           {children}
         </div>
         <p className="mt-12 border-t border-white/10 pt-6 text-xs text-dim/70">
-          Last updated 9 September 2026 · Designed and programmed by Paul John E. Antigo.
+          Last updated 12 September 2026 · Designed and programmed by{" "}
+          <a href={DEVELOPER.url} rel="me author" className="underline hover:text-starlight">
+            {DEVELOPER.name} ({DEVELOPER.handle})
+          </a>.
         </p>
       </article>
     </main>

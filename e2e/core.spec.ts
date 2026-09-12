@@ -67,12 +67,28 @@ test("landing content and primary paths remain visible when client bundles fail"
 });
 
 test("public metadata and shallow health endpoints expose no private state", async ({ request }) => {
-  const [health, robots, sitemap] = await Promise.all([
+  const [home, health, robots, sitemap, favicon, logo, socialImage] = await Promise.all([
+    request.get("/"),
     request.get("/api/health"),
     request.get("/robots.txt"),
     request.get("/sitemap.xml"),
+    request.get("/favicon.png"),
+    request.get("/baul-logo.png"),
+    request.get("/baul-social.png"),
   ]);
+  expect(home.ok()).toBeTruthy();
   expect(health.ok()).toBeTruthy();
+  for (const image of [favicon, logo, socialImage]) {
+    expect(image.ok()).toBeTruthy();
+    expect(image.headers()["content-type"]).toContain("image/png");
+    expect((await image.body()).subarray(0, 8).toString("hex")).toBe("89504e470d0a1a0a");
+  }
+  const homeHtml = await home.text();
+  expect(homeHtml).toContain("/favicon.png");
+  expect(homeHtml).toContain("/baul-social.png");
+  expect(homeHtml).toContain("Paul John E. Antigo");
+  expect(homeHtml).toContain("itszoriel");
+  expect(homeHtml).toContain("https://schema.org");
   const healthBody = await health.json();
   expect(healthBody).toMatchObject({ status: "ok" });
   expect(JSON.stringify(healthBody)).not.toContain("SUPABASE_SECRET_KEY");

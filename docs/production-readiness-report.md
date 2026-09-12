@@ -1,6 +1,6 @@
 # Production-readiness implementation report
 
-Updated 11 September 2026. The first release target is the protected, owner-only Vercel beta at `https://baul-memories.vercel.app`. It is designed and programmed by Paul John E. Antigo; public support and privacy contact use `pauljohn.antigo@gmail.com`.
+Updated 12 September 2026. The first release target is the protected, owner-only Vercel beta at `https://baul-memories.vercel.app`. It is designed and programmed by Paul John E. Antigo (`itszoriel`); public support and privacy contact use `pauljohn.antigo@gmail.com`.
 
 ## Implemented
 
@@ -15,6 +15,7 @@ Updated 11 September 2026. The first release target is the protected, owner-only
 - Added exact Node 24 runtime declarations, production-mode Playwright, CI database/browser gates, third-party notices, and operational/release documentation.
 - Migrated the action-email template from the deprecated React Email component packages to the supported unified React Email 6 package, pinned the version, and added a markup-rendering regression test.
 - Located Vercel Functions in Sydney (`syd1`) beside the hosted Supabase project (`ap-southeast-2`) to avoid an unnecessary trans-Pacific round trip on API requests.
+- Replaced the placeholder chest mark with the owner-supplied woven Baul logo across the interface. Added stable PNG favicon and Apple-icon URLs, a 1200×630 social card, author/creator metadata, visible `itszoriel` attribution, and truthful `WebSite`/`Person` structured data.
 
 ## Why these decisions
 
@@ -41,7 +42,7 @@ Updated 11 September 2026. The first release target is the protected, owner-only
 
 ## Release blockers and required operator work
 
-- Create a dedicated private R2 bucket and least-privilege credentials, configure the GitHub backup secrets, run the workflow manually, and complete a restore drill. Docker is now available, but the cloud backup credentials and production database URL have not been supplied or verified.
+- Owner decision recorded 12 September 2026: R2 setup is intentionally postponed for the owner-only beta. The automated workflow and restore runbook exist, but there is no verified independent recovery copy. Keep Vercel Authentication enabled, avoid treating beta data as recoverable, and complete the private bucket, least-privilege credentials, first backup, and restore drill before inviting external users or storing irreplaceable content.
 - Turn off the dormant hosted Twilio provider in the Supabase dashboard. Phone signup is already disabled, but the provider toggle cannot be cleared by the CLI. Confirm organization-member MFA in the dashboard.
 - Choose a fixed-egress backup/administration path before restricting direct Postgres CIDRs. Direct database access currently requires SSL but permits all IPv4/IPv6 sources so dynamic GitHub-hosted backup runners can connect.
 - Have the privacy notice, beta terms, acceptable-use text, media rights language, and deletion/retention promises reviewed by a qualified human for the jurisdictions and audience actually served.

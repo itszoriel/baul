@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import Landing from "@/components/landing/Landing";
-import { isSupabaseConfigured, supabaseAnonKey, supabaseUrl } from "@/lib/env";
+import { BRAND, DEVELOPER } from "@/lib/copy";
+import { appUrl, isSupabaseConfigured, supabaseAnonKey, supabaseUrl } from "@/lib/env";
 import type { CountryStat, RegionStat } from "@/lib/types";
 
 // The landing page reads ONLY the aggregate stats tables (spec §2.5) —
@@ -33,5 +34,33 @@ export default async function Home() {
     countryStats = countries.data ?? [];
   }
 
-  return <Landing regionStats={regionStats} countryStats={countryStats} configured={configured} />;
+  const origin = appUrl();
+  const structuredData = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "@id": `${origin}/#website`,
+    name: BRAND.name,
+    alternateName: "Baul Project",
+    url: origin,
+    description: "A private, key-gated treasure chest for shared notes, photos, letters, and music.",
+    image: `${origin}/baul-social.png`,
+    creator: {
+      "@type": "Person",
+      "@id": `${origin}/#developer`,
+      name: DEVELOPER.name,
+      alternateName: DEVELOPER.handle,
+      url: DEVELOPER.url,
+      sameAs: [DEVELOPER.url],
+    },
+  };
+
+  return (
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, "\\u003c") }}
+      />
+      <Landing regionStats={regionStats} countryStats={countryStats} configured={configured} />
+    </>
+  );
 }
