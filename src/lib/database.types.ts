@@ -1073,6 +1073,7 @@ export type Database = {
         Row: {
           country_id: string | null
           created_at: string
+          created_by_user_id: string | null
           division_id: string | null
           id: string
           key_hash: string
@@ -1089,6 +1090,7 @@ export type Database = {
         Insert: {
           country_id?: string | null
           created_at?: string
+          created_by_user_id?: string | null
           division_id?: string | null
           id?: string
           key_hash: string
@@ -1105,6 +1107,7 @@ export type Database = {
         Update: {
           country_id?: string | null
           created_at?: string
+          created_by_user_id?: string | null
           division_id?: string | null
           id?: string
           key_hash?: string
