@@ -40,6 +40,19 @@ Updated 12 September 2026. The first release target is the protected, owner-only
 - Vercel project `prince-98d5/baul-memories` is linked locally and to `itszoriel/baul`, with `main` as its production branch. Production has the application, owner-only Resend, Turnstile, and Sentry variables; preview receives no production database credentials. Secret values use Vercel's non-readable Sensitive type where appropriate. Vercel Authentication protects all deployments, including the production domain, and Git-fork protection is enabled.
 - A read-only hosted-data inventory confirmed the accidental E2E incident created exactly four empty vault rows and no related members, memories, messages, songs, invites, or storage objects. They remain untouched pending an export and explicit cleanup confirmation.
 
+## 28 November 2026 release
+
+- PR #1 merged (`05ca3ef`) after all CI jobs passed: application, database (94/94 pgTAP) and production-browser (Chromium, WebKit, iPhone).
+- A pre-migration hosted backup (schema, data, roles) was taken to a local folder outside the synced project directory.
+- Migrations `20261127090000_recovery_requires_confirmed_email.sql` and `20261127100000_creator_binding_quotas_retention.sql` were applied to the hosted project; hosted schema lint reports no warnings; the `baul-purge-expired-records` job (03:17 UTC daily) is active beside the stats and cleanup schedules.
+- Production was deployed from `main` with the Vercel CLI (Next.js 16.4.6). Verified through the protected URL: health reports the merge commit, CSP names only the project's Supabase origin, a wrong key returns the generic not-found response through the new limiter, and a cross-origin mutation is rejected.
+- GitHub `production` environment created with `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` and `SUPABASE_PROJECT_REF`. The deploy workflow stops with a named error until the three credentials below are added.
+
+Owner actions still open from this release:
+- Add `VERCEL_TOKEN`, `SUPABASE_ACCESS_TOKEN` and `SUPABASE_DB_PASSWORD` to the `production` environment (credentials are entered by the owner).
+- Rotate the Supabase secret key and `APP_SECRET` (both were present in a cloud-synced local file), following the README procedure.
+- Disable the dormant Twilio provider and confirm organization MFA in the Supabase dashboard.
+
 ## Release blockers and required operator work
 
 - Owner decision recorded 12 September 2026: R2 setup is intentionally postponed for the owner-only beta. The automated workflow and restore runbook exist, but there is no verified independent recovery copy. Keep Vercel Authentication enabled, avoid treating beta data as recoverable, and complete the private bucket, least-privilege credentials, first backup, and restore drill before inviting external users or storing irreplaceable content.
