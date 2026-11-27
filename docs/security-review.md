@@ -30,6 +30,42 @@ continues to lint without warnings, but the earlier statement that local and
 remote migration versions match no longer applies until this release gate is
 completed. See `docs/production-readiness-report.md` for the current status.
 
+## 27 November 2026 review delta
+
+A second full review of the repository found the issues below. Each is fixed
+on branch `fix/phase0-security` unless marked otherwise. New migrations:
+`20261127090000_recovery_requires_confirmed_email.sql` and
+`20261127100000_creator_binding_quotas_retention.sql` (not yet applied to the
+hosted project).
+
+| ID | Severity | Finding | Remediation |
+| --- | --- | --- | --- |
+| SBR-012 | High | Recovery links went to unconfirmed recovery emails; a mistyped or foreign address could obtain a new permanent key. | Route filters to confirmed addresses; `confirm_vault_recovery` refuses unconfirmed vaults; pgTAP covers both. |
+| SBR-013 | High | Rate-limit buckets mixed IP with request-supplied values, so varying the email/key/token minted unlimited fresh buckets (unlimited creation, verification-email relay, one row per guess). | Separate per-IP and cross-IP identifier buckets; per-recipient email cap; Turnstile escalation only where the UI supports it (it previously halved upload limits). Verification emails no longer carry creator-written text. |
+| SBR-014 | High | Local `.env` held hosted secrets and `next dev`/Playwright wrote to production. | `next.config.ts` refuses a non-local Supabase URL outside Vercel unless `BAUL_ALLOW_REMOTE_SUPABASE=true`. **Operator: rotate the Supabase secret key and move secrets out of the OneDrive folder.** |
+| SBR-015 | High | No retention or write quotas; browser inserts were unlimited. | Daily `private.purge_expired_records()` (limiter rows, expired tokens, processed jobs, memberless vaults, idle anonymous users); per-keeper per-minute/per-day insert quotas. |
+| SBR-016 | Medium | Vault creation and admin membership were separate; the first key holder to join became admin. | `vaults.created_by_user_id`; only the creator can join first. |
+| SBR-017 | Medium | Upload routes trusted client-side metadata stripping and had no pixel bound. | `validateWebpImage`: exact RIFF length, no EXIF/XMP/animation/unknown chunks, dimension caps. |
+| SBR-018 | Medium | Silent reclaim; legacy six-character phrases still accepted. | Legacy phrases retired; cross-IP per-keeper reclaim limit; admin security activity view. |
+| SBR-019 | Medium | Entry passes survived key rotation. | Passes carry a key fingerprint checked on join/reclaim. |
+| SBR-020 | Medium | Recovery request timing revealed whether an email guarded a vault. | Lookup and delivery run in `after()`. |
+| SBR-021 | Medium | One `APP_SECRET` for four purposes with no rotation path. | HKDF per-purpose keys, `APP_SECRET_PREVIOUS`, lazy and batch re-keying. |
+| SBR-022 | Medium | Authorization re-implemented by hand in each service-role route. | Single `requireMember` gate with unit tests. |
+| SBR-023 | Medium | Vercel deployed `main` regardless of CI; migrations were manual. | `deploy.yml` deploys only verified commits after `supabase db push`; Vercel Git auto-deploy of `main` disabled. **Operator: add the workflow secrets.** |
+| SBR-024 | Medium | Sentry alerts lost their context (`extra` was scrubbed). | Safe fields are sent as tags. |
+| SBR-026 | Critical | Advisories published after the September audit: Next.js 16.3.4 (unauthenticated RCE in Image Optimization with SVG, RCE in `use cache`, SSRF, cache poisoning) and `@sentry/nextjs` 10.74.0 (tunnel-route middleware bypass). | Upgraded to Next.js 16.4.6 / `eslint-config-next` 16.4.6 and `@sentry/nextjs` 10.78.0; `npm run audit:prod` passes. Six moderate build-time advisories (`glob`/`minimatch` via Sentry plugins and react-email) need Sentry 11 and remain. **The currently deployed build is affected until this ships.** |
+| SBR-025 | Low | CSP allowed every `*.supabase.co` project; races on photo cap and rename cooldown; name-reset collisions; unbounded timeline query; sealed letters stayed empty after unlock until reload; expired `?key=` compatibility code; Actions pinned to tags. | All fixed. |
+
+Not changed, with reasons:
+- `key_lookup` stays an unsalted SHA-256. Keys carry 92 bits of entropy, and
+  tying the verifier to a rotatable secret would lock out vaults not opened
+  before the old secret is retired (the raw key is never stored).
+- Third-party audio URLs (`media-src https:`) remain an accepted, documented
+  IP-exposure trade-off of the paste-a-link feature.
+- Turnstile on anonymous sign-in is not enabled: it would put a challenge in
+  front of every first visit. Supabase's per-IP anonymous sign-in limit and the
+  new purge of idle anonymous users bound the growth instead.
+
 ## Findings
 
 ### SBR-001 — Critical — Hosted schema is behind the application

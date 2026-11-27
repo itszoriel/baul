@@ -1,0 +1,70 @@
+name: deploy production
+
+# Production ships only from a commit that passed the full quality workflow,
+# with database migrations applied before the application that depends on
+# them. Vercel's own Git auto-deploy of `main` is disabled in vercel.json.
+#
+# Required repository secrets (Settings -> Secrets and variables -> Actions),
+# scoped to the `production` environment:
+#   SUPABASE_ACCESS_TOKEN  personal access token for the Supabase CLI
+#   SUPABASE_PROJECT_REF   hosted project ref
+#   SUPABASE_DB_PASSWORD   database password for `supabase db push`
+#   VERCEL_TOKEN           Vercel access token
+#   VERCEL_ORG_ID          from .vercel/project.json
+#   VERCEL_PROJECT_ID      from .vercel/project.json
+
+on:
+  workflow_run:
+    workflows: [quality]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # Deploy exactly the commit the quality workflow verified.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
+
+      - name: Show pending database migrations
+        run: |
+          npx supabase link --project-ref "$SUPABASE_PROJECT_REF" --password "$SUPABASE_DB_PASSWORD"
+          npx supabase migration list --linked
+
+      - name: Apply database migrations
+        run: npx supabase db push --linked --password "$SUPABASE_DB_PASSWORD"
+
+      - name: Build and deploy to Vercel production
+        env:
+          # This is the production build; it is allowed to target the hosted
+          # Supabase project (see src/lib/remote-database-guard.ts).
+          VERCEL: "1"
+        run: |
+          npx --yes vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+          npx --yes vercel build --prod --token="$VERCEL_TOKEN"
+          npx --yes vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"
