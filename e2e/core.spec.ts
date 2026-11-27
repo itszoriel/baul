@@ -15,15 +15,31 @@ for (const route of ["/", "/create", "/enter", "/recover", "/vaults", "/privacy"
       document.fonts.ready,
       new Promise((resolve) => window.setTimeout(resolve, 5_000)),
     ]));
-    // Avoid scanning a transient focus-color frame. Axe can otherwise
-    // misclassify the focused input's animated background as foreground text
-    // in WebKit even though the settled placeholder contrast is sufficient.
-    const focused = page.locator(":focus");
-    if (await focused.count()) {
-      await focused.evaluate((element) => Promise.all(
-        element.getAnimations().map((animation) => animation.finished.catch(() => undefined)),
-      ));
-    }
+    // Avoid scanning a transient frame. Entrance fades and autofocus color
+    // transitions can start after load; axe blends ancestor opacity, so a
+    // mid-fade input reads as e.g. #1d1915 on #17130f even though the settled
+    // contrast passes. Wait for (1) every finite CSS/WAAPI animation and
+    // (2) Framer Motion's JS-driven inline opacity fades, which
+    // document.getAnimations() cannot see. Infinite animations are ignored.
+    await page.evaluate(async () => {
+      const nextFrame = () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      for (let round = 0; round < 3; round += 1) {
+        await nextFrame();
+        const settling = document.getAnimations().filter((animation) => {
+          const end = animation.effect?.getComputedTiming().endTime;
+          return typeof end === "number" && Number.isFinite(end);
+        });
+        if (!settling.length) break;
+        await Promise.race([
+          Promise.all(settling.map((animation) => animation.finished.catch(() => undefined))),
+          new Promise((resolve) => window.setTimeout(resolve, 2_000)),
+        ]);
+      }
+      const fading = () => [...document.querySelectorAll<HTMLElement>("[style*='opacity']")]
+        .some((element) => element.style.opacity !== "" && Number(element.style.opacity) < 1);
+      const deadline = performance.now() + 3_000;
+      while (fading() && performance.now() < deadline) await nextFrame();
+    });
     const results = await new AxeBuilder({ page }).analyze();
     expect(results.violations.filter((violation) => ["serious", "critical"].includes(violation.impact ?? ""))).toEqual([]);
   });
@@ -93,7 +109,7 @@ test("public metadata and shallow health endpoints expose no private state", asy
   expect(healthBody).toMatchObject({ status: "ok" });
   expect(JSON.stringify(healthBody)).not.toContain("SUPABASE_SECRET_KEY");
   expect(await robots.text()).toContain("Disallow: /vault");
-  expect(await sitemap.text()).toContain("http://localhost:3000/privacy");
+  expect(await sitemap.text()).toContain("http://127.0.0.1:3000/privacy");
 });
 
 test("landing and picker visual baselines", async ({ page }, testInfo) => {

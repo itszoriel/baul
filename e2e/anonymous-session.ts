@@ -9,7 +9,7 @@ const MAX_CHUNK_SIZE = 3180;
  * way the app's create flow does before it creates a baul (the server binds
  * the new baul to its creator's session).
  */
-export async function signInAnonymously(page: Page, appUrl = "http://localhost:3000"): Promise<void> {
+export async function signInAnonymously(page: Page, appUrl = "http://127.0.0.1:3000"): Promise<void> {
   const supabaseUrl = process.env.E2E_SUPABASE_URL;
   const publishableKey = process.env.E2E_SUPABASE_PUBLISHABLE_KEY;
   if (!supabaseUrl || !publishableKey) {

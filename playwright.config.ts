@@ -3,7 +3,9 @@ import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 
 const fullStack = process.env.E2E_FULL === "1";
-const testAppUrl = "http://localhost:3000";
+// Use the IPv4 loopback the server binds to. "localhost" may resolve to ::1,
+// where another local dev server (e.g. a Vite app) can be listening.
+const testAppUrl = "http://127.0.0.1:3000";
 
 function localSupabaseEnvironment(): Record<string, string> {
   // Playwright loads this config again inside every worker process. Only the

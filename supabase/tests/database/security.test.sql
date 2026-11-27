@@ -380,7 +380,9 @@ select is((select vault_count from public.country_stats where iso3 = 'ZXX'), 3, 
 select is((select vault_count from public.region_stats where division_id = '32000000-0000-0000-0000-000000000001'), 3, 'division aggregate appears at the privacy threshold');
 select is(
   (select vault_count from public.country_stats where iso3 = 'WLD'),
-  (select vault_count + 4 from _baul_test_baseline),
+  -- 'Second' lost its only keeper in the cascade test above, so it no longer
+  -- counts; First, Third and Fourth do.
+  (select vault_count + 3 from _baul_test_baseline),
   'world total remains exact without exposing a location'
 );
 
@@ -412,16 +414,19 @@ select ok(exists (select 1 from public.vaults where id = '70000000-0000-0000-000
 select ok(exists (select 1 from public.vaults where id = '10000000-0000-0000-0000-000000000001'), 'vaults with keepers are never purged');
 
 -- Atomic per-vault photo limit.
+insert into public.members (id, vault_id, user_id, display_name, avatar_color, role)
+values ('22000000-0000-0000-0000-000000000022', '20000000-0000-0000-0000-000000000002',
+  'cccccccc-0000-0000-0000-000000000033', 'P', '#AABBCC', 'admin');
 select throws_ok(
-  $$do $photos$
+  $sql$do $photos$
   begin
     for i in 1..251 loop
       insert into public.memories (vault_id, member_id, kind, media_url)
-      values ('20000000-0000-0000-0000-000000000002', '21000000-0000-0000-0000-000000000003', 'photo',
+      values ('20000000-0000-0000-0000-000000000002', '22000000-0000-0000-0000-000000000022', 'photo',
         'photos/20000000-0000-0000-0000-000000000002/' || gen_random_uuid() || '.webp');
     end loop;
   end
-  $photos$$$,
+  $photos$$sql$,
   'P0001', 'photo_limit_reached', 'a Baul cannot exceed its photo limit, even under concurrency'
 );
 
@@ -430,14 +435,14 @@ update public.members set revoked_at = null where id = '11000000-0000-0000-0000-
 select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}', true);
 set local role authenticated;
 select throws_ok(
-  $$do $flood$
+  $sql$do $flood$
   begin
     for i in 1..31 loop
       insert into public.messages (vault_id, member_id, body)
       values ('10000000-0000-0000-0000-000000000001', '11000000-0000-0000-0000-000000000001', 'flood ' || i);
     end loop;
   end
-  $flood$$$,
+  $flood$$sql$,
   'P0001', 'write_rate_limited', 'a keeper cannot flood a Baul with browser inserts'
 );
 reset role;
