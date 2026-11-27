@@ -17,9 +17,10 @@ export async function POST(req: NextRequest) {
 
   const limit = await rateLimit(req, {
     name: "verify-key",
-    max: 5,
-    windowMs: 60_000,
-    identifier: keyLookupHash(key),
+    // Per IP only: a per-guess bucket would create a fresh row for every
+    // guess and never escalate. Challenge after 5 tries, block after 10.
+    ip: { max: 10, windowMs: 60_000 },
+    challenge: true,
     turnstileToken: parsed.data.turnstileToken,
   }).catch(() => null);
   if (!limit) return jsonError(503, "Baul is temporarily unavailable. Try again.");
@@ -60,7 +61,7 @@ export async function POST(req: NextRequest) {
 
   const memberCount = count ?? 0;
   return NextResponse.json({
-    joinToken: signJoinTicket(vault.id),
+    joinToken: signJoinTicket(vault.id, keyLookupHash(key)),
     vault: {
       name: vault.name,
       vaultType: vault.vault_type,

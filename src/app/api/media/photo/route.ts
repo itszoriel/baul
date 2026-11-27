@@ -1,34 +1,30 @@
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { isSameOrigin, jsonError, loadMember } from "@/lib/api";
+import { isSameOrigin, jsonError } from "@/lib/api";
 import { LIMITS } from "@/lib/domain";
 import { rateLimit } from "@/lib/rate-limit";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { requireVaultSession } from "@/lib/supabase/server";
+import { requireMember } from "@/lib/authz";
+import { validateWebpImage } from "@/lib/webp";
 
 const MAX_BYTES = 10 * 1024 * 1024;
 
-function isWebp(buf: Uint8Array): boolean {
-  return buf.length > 12 && buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46
-    && buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50;
-}
+// The in-app uploader produces images of at most 2000px on the longest side.
+const MAX_DIMENSION = 2048;
 
 export async function POST(req: NextRequest) {
   if (!isSameOrigin(req)) return jsonError(403, "Request origin was not accepted.");
   const form = await req.formData().catch(() => null);
   const vaultId = z.uuid().safeParse(form?.get("vaultId"));
   if (!vaultId.success) return jsonError(400, "Choose a valid Baul.");
-  const session = await requireVaultSession(vaultId.data);
-  if (!session.ok) return jsonError(session.status, session.error);
-  const member = await loadMember(vaultId.data, session.claims.memberId);
-  if (!member) return jsonError(403, "No active keeper access to this baul.");
+  const access = await requireMember(vaultId.data);
+  if (!access.ok) return access.response;
+  const member = access.member;
 
   const limit = await rateLimit(req, {
     name: "photo-upload",
-    max: 10,
-    windowMs: 60 * 60_000,
-    identifier: member.id,
+    identifier: { value: member.id, max: 10, windowMs: 60 * 60_000 },
   }).catch(() => null);
   if (!limit?.ok) {
     return jsonError(429, "Too many photos were uploaded. Try again later.", {
@@ -55,7 +51,7 @@ export async function POST(req: NextRequest) {
   const songValue = form?.get("songId");
   const songId = typeof songValue === "string" && songValue ? songValue : null;
   const bytes = new Uint8Array(await file.arrayBuffer());
-  if (!isWebp(bytes)) return jsonError(415, "Photos must go through the in-app uploader.");
+  if (!validateWebpImage(bytes, MAX_DIMENSION).ok) return jsonError(415, "Photos must go through the in-app uploader.");
 
   if (songId) {
     if (!z.uuid().safeParse(songId).success) return jsonError(400, "Invalid soundtrack selection.");
@@ -80,6 +76,9 @@ export async function POST(req: NextRequest) {
 
   if (error || !memory) {
     await admin.storage.from("photos").remove([key]);
+    if (error?.message.includes("photo_limit_reached")) {
+      return jsonError(409, `This Baul has reached its ${LIMITS.photosPerVault}-photo limit.`);
+    }
     return jsonError(500, "Could not add this memory. Try again.");
   }
   return NextResponse.json({ memory }, { headers: { "Cache-Control": "private, no-store" } });

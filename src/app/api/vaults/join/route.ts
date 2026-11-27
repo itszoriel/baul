@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isSameOrigin, jsonError } from "@/lib/api";
 import { pickAvatarColor } from "@/lib/avatar-colors";
-import { verifyJoinTicket } from "@/lib/crypto";
+import { keyTag, verifyJoinTicket } from "@/lib/crypto";
 import { manualJoinSchema } from "@/lib/domain";
 import { hashPassphrase, normalizePassphrase } from "@/lib/keys";
 import { rateLimit } from "@/lib/rate-limit";
@@ -21,9 +21,9 @@ export async function POST(req: NextRequest) {
 
   const limit = await rateLimit(req, {
     name: "join-vault",
-    max: 10,
-    windowMs: 60_000,
-    identifier: ticket.vaultId,
+    ip: { max: 10, windowMs: 60_000 },
+    identifier: { value: ticket.vaultId, max: 30, windowMs: 60_000 },
+    challenge: true,
     turnstileToken: parsed.data.turnstileToken,
   }).catch(() => null);
   if (!limit) return jsonError(503, "Baul is temporarily unavailable. Try again.");
@@ -35,10 +35,14 @@ export async function POST(req: NextRequest) {
   const admin = supabaseAdmin();
   const { data: vault } = await admin
     .from("vaults")
-    .select("id, name, vault_type")
+    .select("id, name, vault_type, key_lookup")
     .eq("id", ticket.vaultId)
     .maybeSingle();
   if (!vault) return jsonError(404, "This baul no longer exists.");
+  // The pass is bound to the key it was issued for; a rotated key voids it.
+  if (keyTag(vault.key_lookup) !== ticket.keyTag) {
+    return jsonError(403, "This entry pass has expired—enter your key again.");
+  }
 
   const { data: existing } = await admin
     .from("members")
@@ -74,6 +78,9 @@ export async function POST(req: NextRequest) {
   const joined = data?.[0];
   if (error || !joined) {
     if (error?.message.includes("vault_full")) return jsonError(409, "This baul is already full.");
+    if (error?.message.includes("vault_not_ready")) {
+      return jsonError(409, "This baul's creator hasn't opened it yet. Try again once they have.");
+    }
     if (error?.message.includes("membership_revoked")) return jsonError(403, "This keeper was removed from the baul.");
     if (error?.code === "23505") return jsonError(409, "That keeper name is already taken.");
     return jsonError(500, "Could not join this baul. Try again.");

@@ -106,3 +106,11 @@ export interface CountryStat {
   song_count: number;
   updated_at: string;
 }
+
+/** A membership security event shown to admins (auth user ids are never exposed). */
+export interface SecurityEvent {
+  type: "joined" | "reclaimed" | "revoked" | "reactivated" | "key_rotated";
+  subjectMemberId: string | null;
+  actorMemberId: string | null;
+  at: string;
+}

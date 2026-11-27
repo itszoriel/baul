@@ -13,7 +13,9 @@ export default function KeyEmail({ vaultName, actionUrl, kind }: ActionEmailProp
   return (
     <Html>
       <Head />
-      <Preview>{invite ? `An invitation to keep “${vaultName}.”` : verification ? `Confirm the recovery email for “${vaultName}.”` : `Confirm recovery for “${vaultName}.”`}</Preview>
+      {/* Verification goes to an unconfirmed address, so it never repeats the
+          creator-written vault name (no spam or phishing text relay). */}
+      <Preview>{invite ? `An invitation to keep “${vaultName}.”` : verification ? "Confirm your Baul recovery email." : `Confirm recovery for “${vaultName}.”`}</Preview>
       <Body style={{ backgroundColor: "#17130f", fontFamily: "Georgia, 'Times New Roman', serif", padding: "32px 0" }}>
         <Container style={{ backgroundColor: "#f2e8d5", border: "1px solid #a88136", borderRadius: 12, maxWidth: 520, padding: 40 }}>
           <Text style={{ color: "#806526", fontSize: 12, letterSpacing: 4, margin: 0, textTransform: "uppercase" }}>
@@ -26,7 +28,7 @@ export default function KeyEmail({ vaultName, actionUrl, kind }: ActionEmailProp
             {invite
               ? `A keeper invited you to “${vaultName}.” This private link expires and works once. You will choose your keeper name and personal keeper phrase when you enter.`
               : verification
-                ? `Confirm that this address can receive recovery links for “${vaultName}.” This does not reveal or change the permanent key.`
+                ? "Someone created a Baul and chose this address for key recovery. Confirm only if that was you. This does not reveal or change the permanent key."
                 : `Someone requested a replacement permanent key for “${vaultName}.” The current key still works and changes only after this private, single-use link is confirmed.`}
           </Text>
           <Link

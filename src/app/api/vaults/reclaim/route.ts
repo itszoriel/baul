@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isSameOrigin, jsonError } from "@/lib/api";
-import { verifyJoinTicket } from "@/lib/crypto";
+import { keyTag, verifyJoinTicket } from "@/lib/crypto";
 import { LIMITS, reclaimSchema } from "@/lib/domain";
 import { normalizePassphrase, verifyPassphrase } from "@/lib/keys";
 import { rateLimit } from "@/lib/rate-limit";
@@ -22,9 +22,11 @@ export async function POST(req: NextRequest) {
 
   const limit = await rateLimit(req, {
     name: "reclaim-member",
-    max: 5,
-    windowMs: 60_000,
-    identifier: `${ticket.vaultId}:${parsed.data.username}`,
+    ip: { max: 10, windowMs: 60_000 },
+    // Shared across all IPs so a keeper phrase cannot be guessed from many
+    // sources at once.
+    identifier: { value: `${ticket.vaultId}:${parsed.data.username.trim()}`, max: 5, windowMs: 15 * 60_000 },
+    challenge: true,
     turnstileToken: parsed.data.turnstileToken,
   }).catch(() => null);
   if (!limit) return jsonError(503, "Baul is temporarily unavailable. Try again.");
@@ -36,10 +38,14 @@ export async function POST(req: NextRequest) {
   const admin = supabaseAdmin();
   const { data: vault } = await admin
     .from("vaults")
-    .select("id, name, vault_type")
+    .select("id, name, vault_type, key_lookup")
     .eq("id", ticket.vaultId)
     .maybeSingle();
   if (!vault) return jsonError(404, "This baul no longer exists.");
+  // The pass is bound to the key it was issued for; a rotated key voids it.
+  if (keyTag(vault.key_lookup) !== ticket.keyTag) {
+    return jsonError(403, "This entry pass has expired—enter your key again.");
+  }
 
   const { data: members } = await admin
     .from("members")

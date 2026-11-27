@@ -1,5 +1,6 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 import { randomBytes } from "node:crypto";
+import { signInAnonymously } from "./anonymous-session";
 
 const fullStack = process.env.E2E_FULL === "1";
 const youtubeApiUrl = "https://www.youtube.com/iframe_api";
@@ -40,6 +41,7 @@ async function createAndJoin(page: Page) {
     "x-forwarded-for": testClientIp(),
   });
   await page.goto("/");
+  await signInAnonymously(page);
   const response = await page.evaluate(async (data) => {
     const result = await fetch("/api/vaults", {
       method: "POST",

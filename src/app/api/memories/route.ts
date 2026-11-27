@@ -1,17 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isSameOrigin, jsonError, loadMember } from "@/lib/api";
+import { isSameOrigin, jsonError } from "@/lib/api";
 import { memoryEntrySchema } from "@/lib/domain";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { requireVaultSession } from "@/lib/supabase/server";
+import { requireMember } from "@/lib/authz";
 
 export async function POST(req: NextRequest) {
   if (!isSameOrigin(req)) return jsonError(403, "Request origin was not accepted.");
   const parsed = memoryEntrySchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return jsonError(400, parsed.error.issues[0]?.message ?? "Invalid memory.");
-  const session = await requireVaultSession(parsed.data.vaultId);
-  if (!session.ok) return jsonError(session.status, session.error);
-  const member = await loadMember(parsed.data.vaultId, session.claims.memberId);
-  if (!member) return jsonError(403, "No active keeper access to this baul.");
+  const access = await requireMember(parsed.data.vaultId);
+  if (!access.ok) return access.response;
+  const member = access.member;
 
   const unlockAt = parsed.data.unlockAt ? new Date(parsed.data.unlockAt) : null;
   if (unlockAt && unlockAt.getTime() <= Date.now() + 60 * 60_000) {

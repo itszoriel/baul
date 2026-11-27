@@ -1,11 +1,11 @@
 import { randomUUID } from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { isSameOrigin, jsonError, loadMember } from '@/lib/api';
+import { isSameOrigin, jsonError } from '@/lib/api';
 import { stickerNameSchema } from '@/lib/domain';
 import { supabaseAdmin } from '@/lib/supabase/admin';
-import { requireVaultSession } from '@/lib/supabase/server';
-import { webpDimensions } from '@/lib/webp';
+import { requireMember } from '@/lib/authz';
+import { validateWebpImage } from '@/lib/webp';
 
 const MAX_BYTES = 512 * 1024;
 const MAX_DIMENSION = 512;
@@ -18,20 +18,17 @@ export async function POST(req: NextRequest) {
   if (!vaultId.success) return jsonError(400, 'Choose a valid Baul.');
   if (!name.success) return jsonError(400, name.error.issues[0]?.message ?? 'Give your sticker a valid name.');
 
-  const session = await requireVaultSession(vaultId.data);
-  if (!session.ok) return jsonError(session.status, session.error);
-  const member = await loadMember(vaultId.data, session.claims.memberId);
-  if (!member) return jsonError(403, 'No active keeper access to this baul.');
+  const access = await requireMember(vaultId.data);
+  if (!access.ok) return access.response;
+  const member = access.member;
 
   const file = form?.get('file');
   if (!(file instanceof File)) return jsonError(400, 'No sticker received.');
   if (file.size > MAX_BYTES) return jsonError(413, 'That sticker is too large (max 512KB).');
   const bytes = new Uint8Array(await file.arrayBuffer());
-  const dimensions = webpDimensions(bytes);
-  if (!dimensions) return jsonError(415, 'Stickers must go through the in-app uploader.');
-  if (dimensions.width > MAX_DIMENSION || dimensions.height > MAX_DIMENSION) {
-    return jsonError(413, 'That sticker has dimensions that are too large.');
-  }
+  const image = validateWebpImage(bytes, MAX_DIMENSION);
+  if (!image.ok && image.reason === 'too_large') return jsonError(413, 'That sticker has dimensions that are too large.');
+  if (!image.ok) return jsonError(415, 'Stickers must go through the in-app uploader.');
 
   const admin = supabaseAdmin();
   const stickerId = randomUUID();

@@ -1,11 +1,11 @@
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { isSameOrigin, jsonError, loadMember } from "@/lib/api";
+import { isSameOrigin, jsonError } from "@/lib/api";
 import { songUploadIntentSchema, type SongUploadIntentResult } from "@/lib/domain";
 import { logOperationalEvent } from "@/lib/observability";
 import { rateLimit } from "@/lib/rate-limit";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { requireVaultSession } from "@/lib/supabase/server";
+import { requireMember } from "@/lib/authz";
 
 export async function POST(req: NextRequest) {
   if (!isSameOrigin(req)) return jsonError(403, "Request origin was not accepted.");
@@ -14,16 +14,13 @@ export async function POST(req: NextRequest) {
     return jsonError(400, parsed.error.issues[0]?.message ?? "Choose a valid MP3.");
   }
 
-  const session = await requireVaultSession(parsed.data.vaultId);
-  if (!session.ok) return jsonError(session.status, session.error);
-  const member = await loadMember(parsed.data.vaultId, session.claims.memberId);
-  if (!member) return jsonError(403, "No active keeper access to this baul.");
+  const access = await requireMember(parsed.data.vaultId);
+  if (!access.ok) return access.response;
+  const member = access.member;
 
   const limit = await rateLimit(req, {
     name: "song-upload",
-    max: 10,
-    windowMs: 60 * 60_000,
-    identifier: member.id,
+    identifier: { value: member.id, max: 10, windowMs: 60 * 60_000 },
   }).catch(() => null);
   if (!limit?.ok) {
     return jsonError(429, "Too many uploads were started. Try again later.", {

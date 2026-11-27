@@ -42,7 +42,8 @@ export async function sendActionEmail(opts: {
       opts.kind === "invite"
         ? `You have been invited to ${opts.vaultName}`
         : opts.kind === "recovery-verify"
-          ? `Confirm the recovery email for ${opts.vaultName}`
+          // Sent to an unconfirmed address: carry no creator-written text.
+          ? "Confirm your Baul recovery email"
           : `Confirm key recovery for ${opts.vaultName}`,
     react: KeyEmail({
       vaultName: opts.vaultName,

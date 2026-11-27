@@ -66,7 +66,9 @@ export const manualJoinSchema = z.object({
 export const reclaimSchema = z.object({
   joinToken: tokenSchema,
   username: displayNameSchema,
-  passphrase: legacyKeeperPhraseSchema,
+  // Legacy six-character phrases were retired after the 2026-09-30
+  // compatibility window; reclaim now requires a full keeper phrase.
+  passphrase: keeperPhraseSchema,
   turnstileToken: z.string().max(2_048).optional().nullable(),
 });
 export const createInviteSchema = z.object({

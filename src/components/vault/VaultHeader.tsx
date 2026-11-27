@@ -13,7 +13,7 @@ import { vaultTypeLabel } from "@/lib/copy";
 import { fileToDataUrl } from "@/lib/image";
 import { computeMilestones } from "@/lib/milestones";
 import type { InviteResult } from "@/lib/domain";
-import type { Member, Memory, Vault } from "@/lib/types";
+import type { Member, Memory, SecurityEvent, Vault } from "@/lib/types";
 import { api, apiUpload } from "@/lib/vault-client";
 
 /**
@@ -429,6 +429,57 @@ function MembersModal({
           </li>
         ))}
       </ul>
+      {isAdmin && <SecurityActivity open={open} vaultId={vaultId} members={members} />}
     </Modal>
+  );
+}
+
+const SECURITY_EVENT_LABEL: Record<SecurityEvent["type"], string> = {
+  joined: "joined",
+  reclaimed: "was reclaimed on another device",
+  revoked: "was removed",
+  reactivated: "was restored",
+  key_rotated: "The baul key was replaced",
+};
+
+function SecurityActivity({ open, vaultId, members }: { open: boolean; vaultId: string; members: Member[] }) {
+  const [events, setEvents] = useState<SecurityEvent[] | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    fetch(`/api/vaults/${vaultId}/security-events`, { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : { events: [] }))
+      .then((body: { events?: SecurityEvent[] }) => {
+        if (!cancelled) setEvents(body.events ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setEvents([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, vaultId]);
+
+  if (!events?.length) return null;
+  const nameOf = (id: string | null) => members.find((m) => m.id === id)?.display_name ?? "A keeper";
+
+  return (
+    <section className="mt-6 border-t border-white/10 pt-4" aria-label="Recent security activity">
+      <h4 className="text-xs uppercase tracking-[0.2em] text-dim">Recent security activity</h4>
+      <p className="mt-1 text-xs text-dim">If a keeper was reclaimed and it wasn&apos;t them, remove that keeper and forge a new key.</p>
+      <ul className="mt-3 space-y-1.5 text-xs text-starlight/80">
+        {events.map((event, index) => (
+          <li key={`${event.at}-${index}`} className="flex justify-between gap-3">
+            <span>
+              {event.type === "key_rotated" ? SECURITY_EVENT_LABEL.key_rotated : `${nameOf(event.subjectMemberId)} ${SECURITY_EVENT_LABEL[event.type]}`}
+            </span>
+            <time dateTime={event.at} className="shrink-0 text-dim">
+              {new Date(event.at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+            </time>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

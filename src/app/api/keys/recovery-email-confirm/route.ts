@@ -11,7 +11,10 @@ export async function POST(req: NextRequest) {
   const parsed = recoveryConfirmSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return jsonError(400, "This confirmation link is invalid or expired.");
   const digest = tokenHash(parsed.data.token);
-  const limit = await rateLimit(req, { name: "recovery-email-confirm", max: 5, windowMs: 24 * 60 * 60_000, identifier: digest }).catch(() => null);
+  const limit = await rateLimit(req, {
+    name: "recovery-email-confirm",
+    ip: { max: 10, windowMs: 60 * 60_000 },
+  }).catch(() => null);
   if (!limit?.ok) return jsonError(429, "Too many confirmation attempts. Try again later.", { retryAfterSec: limit?.retryAfterSec ?? 0 });
   const { data: vaultId, error } = await supabaseAdmin().rpc("confirm_vault_recovery_email", { p_token_hash: digest });
   if (error || !vaultId) return jsonError(400, "This confirmation link is invalid or expired.");

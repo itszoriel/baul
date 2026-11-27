@@ -15,6 +15,10 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import type { Member, MemoryReply, Reaction, Song, Vault, VaultSticker } from "@/lib/types";
 import { currentClaims } from "@/lib/vault-client";
 
+/** Memories are loaded newest-first in pages instead of all at once. */
+const MEMORY_PAGE_SIZE = 50;
+const MEMORY_COLUMNS = "id, vault_id, member_id, kind, content, media_url, song_id, unlock_at, created_at, reactions!reactions_memory_same_vault_fk(id, memory_id, member_id, vault_id, emoji, sticker_id), memory_replies!memory_replies_memory_same_vault_fk(id, memory_id, member_id, vault_id, body, created_at), memory_capsule_payloads!memory_capsule_payloads_memory_id_fkey(content)";
+
 function parseMembers(rows: Array<Omit<Member, "role"> & { role: string }>): Member[] | null {
   const members: Member[] = [];
   for (const row of rows) {
@@ -44,6 +48,7 @@ export default function VaultPage() {
   const [composerOpen, setComposerOpen] = useState(false);
   const [playRequest, setPlayRequest] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
+  const [hasOlderMemories, setHasOlderMemories] = useState(false);
 
   const load = useCallback(async () => {
     const claims = await currentClaims(requestedVaultId);
@@ -56,7 +61,7 @@ export default function VaultPage() {
     const [vaultRes, memberRes, memoryRes, songRes, stickerRes] = await Promise.all([
       db.from("vaults").select("id, name, vault_type, purpose, max_members, milestone_date, created_at").eq("id", claims.vaultId).maybeSingle(),
       db.from("members").select("id, vault_id, display_name, name_changed_at, avatar_url, avatar_color, role, joined_at, revoked_at").eq("vault_id", claims.vaultId).order("joined_at"),
-      db.from("memories").select("id, vault_id, member_id, kind, content, media_url, song_id, unlock_at, created_at, reactions!reactions_memory_same_vault_fk(id, memory_id, member_id, vault_id, emoji, sticker_id), memory_replies!memory_replies_memory_same_vault_fk(id, memory_id, member_id, vault_id, body, created_at), memory_capsule_payloads!memory_capsule_payloads_memory_id_fkey(content)").eq("vault_id", claims.vaultId).order("created_at", { ascending: false }),
+      db.from("memories").select(MEMORY_COLUMNS).eq("vault_id", claims.vaultId).order("created_at", { ascending: false }).limit(MEMORY_PAGE_SIZE),
       db.from("songs").select("id, vault_id, added_by, title, source_url, file_url, created_at").eq("vault_id", claims.vaultId).order("created_at"),
       db.from("vault_stickers").select("id, vault_id, created_by, name, storage_path, created_at, retired_at").eq("vault_id", claims.vaultId).order("created_at"),
     ]);
@@ -82,11 +87,56 @@ export default function VaultPage() {
     setVault({ ...vaultRes.data, vault_type: vaultType.data, purpose: purpose.data });
     setMembers(memberRows);
     setMemories(memoryRes.data ?? []);
+    setHasOlderMemories((memoryRes.data?.length ?? 0) === MEMORY_PAGE_SIZE);
     setSongs((songRes.data as Song[]) ?? []);
     setStickers(stickerRes.data ?? []);
     setMeId(claims.memberId);
     return claims;
   }, [db, requestedVaultId, router]);
+
+  const loadOlderMemories = useCallback(async () => {
+    const oldest = memories[memories.length - 1];
+    if (!vault || !oldest) return;
+    const { data, error } = await db
+      .from("memories")
+      .select(MEMORY_COLUMNS)
+      .eq("vault_id", vault.id)
+      .lt("created_at", oldest.created_at)
+      .order("created_at", { ascending: false })
+      .limit(MEMORY_PAGE_SIZE);
+    if (error) return;
+    const rows = data ?? [];
+    setMemories((current) => {
+      const known = new Set(current.map((memory) => memory.id));
+      return [...current, ...rows.filter((memory) => !known.has(memory.id))];
+    });
+    setHasOlderMemories(rows.length === MEMORY_PAGE_SIZE);
+  }, [db, memories, vault]);
+
+  // A sealed letter's text is unreadable (RLS) until unlock_at, so it was
+  // fetched empty. When the next letter unlocks while the page is open, fetch
+  // its payload then instead of waiting for a reload.
+  useEffect(() => {
+    const now = Date.now();
+    const due = memories
+      .filter((memory) => memory.unlock_at && !memory.content && !memory.memory_capsule_payloads?.content)
+      .map((memory) => ({ id: memory.id, at: new Date(memory.unlock_at!).getTime() }))
+      .filter((letter) => letter.at > now && letter.at - now < 24 * 60 * 60_000);
+    if (!due.length) return;
+    const nextAt = Math.min(...due.map((letter) => letter.at));
+    const ids = due.filter((letter) => letter.at <= nextAt + 1_000).map((letter) => letter.id);
+    // A small margin absorbs clock skew between this device and the database.
+    const timer = window.setTimeout(async () => {
+      const { data } = await db.from("memory_capsule_payloads").select("memory_id, content").in("memory_id", ids);
+      if (!data?.length) return;
+      const payloads = new Map(data.map((row) => [row.memory_id, row.content]));
+      setMemories((current) => current.map((memory) => {
+        const content = payloads.get(memory.id);
+        return content == null ? memory : { ...memory, memory_capsule_payloads: { content } };
+      }));
+    }, nextAt - now + 3_000);
+    return () => window.clearTimeout(timer);
+  }, [db, memories]);
 
   useEffect(() => {
     let channel: ReturnType<typeof db.channel> | null = null;
@@ -217,6 +267,8 @@ export default function VaultPage() {
           onPlaySong={setPlayRequest}
           stickers={stickers}
           onStickerAdded={(sticker) => setStickers((items) => items.some((item) => item.id === sticker.id) ? items : [...items, sticker])}
+          hasOlder={hasOlderMemories}
+          onLoadOlder={loadOlderMemories}
         />
       </main>
 

@@ -35,6 +35,17 @@ export function appSecret(): string {
   return v;
 }
 
+/**
+ * Optional previous APP_SECRET, accepted for reading during a rotation.
+ * Remove it once /api/cron/rekey-recovery-emails reports nothing remaining.
+ */
+export function previousAppSecret(): string | null {
+  const v = process.env.APP_SECRET_PREVIOUS;
+  if (!v) return null;
+  if (v.length < 32) throw new Error("APP_SECRET_PREVIOUS must be at least 32 chars when set.");
+  return v;
+}
+
 export function appUrl(): string {
   return (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
 }

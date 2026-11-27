@@ -31,6 +31,11 @@ function localSupabaseEnvironment(): Record<string, string> {
     throw new Error(`Refusing to run full E2E against non-local Supabase host: ${hostname}`);
   }
 
+  // Test workers inherit the runner's environment; e2e/anonymous-session.ts
+  // uses these to mint creator sessions the same way the create page does.
+  process.env.E2E_SUPABASE_URL = apiUrl;
+  process.env.E2E_SUPABASE_PUBLISHABLE_KEY = publishableKey;
+
   return {
     NEXT_PUBLIC_SUPABASE_URL: apiUrl,
     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: publishableKey,

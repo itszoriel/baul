@@ -71,21 +71,15 @@ function EnterFlow() {
     }
   }
 
-  // A QR scan lands here with the key in the URL — verify it immediately.
+  // Old QR codes and links carried the permanent key in the URL. That
+  // compatibility window closed on 2026-09-30: strip the key from browser
+  // history immediately (so it never reaches a referrer) and never use it.
   useLayoutEffect(() => {
-    const autoKey = new URL(window.location.href).searchParams.get("key");
-    if (!autoKey) return;
+    if (!new URL(window.location.href).searchParams.has("key")) return;
     window.history.replaceState(null, "", "/enter");
-    const cutoff = Date.parse(process.env.NEXT_PUBLIC_LEGACY_QUERY_KEY_CUTOFF ?? "2026-09-30T00:00:00Z");
     queueMicrotask(() => {
-      if (Date.now() > cutoff) {
-        setError("For your privacy, old key links are no longer accepted. Paste the permanent key manually.");
-        return;
-      }
-      setKey(autoKey);
-      void verify(autoKey);
+      setError("For your privacy, old key links are no longer accepted. Paste the permanent key manually.");
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (

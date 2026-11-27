@@ -1,5 +1,6 @@
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 import { randomBytes } from "node:crypto";
+import { signInAnonymously } from "./anonymous-session";
 
 const fullStack = process.env.E2E_FULL === "1";
 
@@ -13,6 +14,7 @@ async function createAndJoin(page: Page, name: string, keeperName: string, phras
     "x-forwarded-for": testClientIp(),
   });
   await page.goto("/");
+  await signInAnonymously(page);
   const response = await page.evaluate(async (data) => {
     const result = await fetch("/api/vaults", {
       method: "POST",
