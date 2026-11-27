@@ -3,7 +3,9 @@ import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 
 const fullStack = process.env.E2E_FULL === "1";
-const testAppUrl = "http://localhost:3000";
+// Use the IPv4 loopback the server binds to. "localhost" may resolve to ::1,
+// where another local dev server (e.g. a Vite app) can be listening.
+const testAppUrl = "http://127.0.0.1:3000";
 
 function localSupabaseEnvironment(): Record<string, string> {
   // Playwright loads this config again inside every worker process. Only the
@@ -30,6 +32,11 @@ function localSupabaseEnvironment(): Record<string, string> {
   if (hostname !== "127.0.0.1" && hostname !== "localhost") {
     throw new Error(`Refusing to run full E2E against non-local Supabase host: ${hostname}`);
   }
+
+  // Test workers inherit the runner's environment; e2e/anonymous-session.ts
+  // uses these to mint creator sessions the same way the create page does.
+  process.env.E2E_SUPABASE_URL = apiUrl;
+  process.env.E2E_SUPABASE_PUBLISHABLE_KEY = publishableKey;
 
   return {
     NEXT_PUBLIC_SUPABASE_URL: apiUrl,

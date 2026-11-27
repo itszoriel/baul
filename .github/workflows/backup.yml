@@ -28,8 +28,21 @@ jobs:
       RESTIC_PASSWORD: ${{ secrets.RESTIC_PASSWORD }}
       RESTIC_REPOSITORY: s3:${{ secrets.R2_ENDPOINT }}/${{ secrets.R2_BUCKET }}/baul-restic
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Check backup configuration
+        shell: bash
+        run: |
+          missing=()
+          for name in SUPABASE_DB_URL RCLONE_CONFIG_SUPABASE_ENDPOINT RCLONE_CONFIG_SUPABASE_ACCESS_KEY_ID \
+            RCLONE_CONFIG_SUPABASE_SECRET_ACCESS_KEY AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY RESTIC_PASSWORD; do
+            [ -n "${!name}" ] || missing+=("$name")
+          done
+          case "$RESTIC_REPOSITORY" in s3:/*|*//baul-restic) missing+=("R2_ENDPOINT or R2_BUCKET");; esac
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error title=No production backup was taken::Missing secrets: ${missing[*]}. See docs/backup-restore.md."
+            exit 1
+          fi
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version-file: .node-version
           cache: npm

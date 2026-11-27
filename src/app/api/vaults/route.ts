@@ -6,21 +6,30 @@ import { resolveVaultLocation } from "@/lib/divisions";
 import { generateVaultKey, hashKey, keyLookupHash } from "@/lib/keys";
 import { rateLimit } from "@/lib/rate-limit";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { supabaseServer } from "@/lib/supabase/server";
 import { sendActionEmail } from "@/lib/email";
 import { appUrl } from "@/lib/env";
 import { logOperationalEvent } from "@/lib/observability";
 
 export async function POST(req: NextRequest) {
   if (!isSameOrigin(req)) return jsonError(403, "Request origin was not accepted.");
+  // The creator's anonymous session is recorded so only they can become the
+  // first (admin) keeper; see join_vault_member.
+  const { data: { user } } = await (await supabaseServer()).auth.getUser();
+  if (!user) return jsonError(401, "Not signed in.");
   const parsed = createVaultSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return jsonError(400, parsed.error.issues[0]?.message ?? "Invalid request.");
   const body = parsed.data;
 
   const limit = await rateLimit(req, {
     name: "create-vault",
-    max: 10,
-    windowMs: 60 * 60 * 1_000,
-    identifier: body.recoveryEmail ?? undefined,
+    ip: { max: 10, windowMs: 60 * 60_000 },
+    // Each recipient receives at most three verification emails a day, from
+    // any number of IPs.
+    identifier: body.recoveryEmail
+      ? { value: body.recoveryEmail, max: 3, windowMs: 24 * 60 * 60_000 }
+      : undefined,
+    challenge: true,
     turnstileToken: body.turnstileToken,
   }).catch(() => null);
   if (!limit) return jsonError(503, "Baul is temporarily unavailable. Try again.");
@@ -36,12 +45,13 @@ export async function POST(req: NextRequest) {
   if (!resolved.ok) return jsonError(400, resolved.error);
 
   const key = generateVaultKey();
+  const keyLookup = keyLookupHash(key);
   const { data: vault, error } = await supabaseAdmin()
     .from("vaults")
     .insert({
       name: body.name,
       key_hash: await hashKey(key),
-      key_lookup: keyLookupHash(key),
+      key_lookup: keyLookup,
       vault_type: vaultType,
       purpose: body.purpose,
       max_members: body.maxMembers,
@@ -50,6 +60,7 @@ export async function POST(req: NextRequest) {
       country_id: resolved.location.countryId,
       division_id: resolved.location.divisionId,
       milestone_date: body.milestoneDate ?? null,
+      created_by_user_id: user.id,
     })
     .select("id, name, vault_type")
     .single();
@@ -82,7 +93,7 @@ export async function POST(req: NextRequest) {
     {
       key,
       vaultId: vault.id,
-      joinToken: signJoinTicket(vault.id),
+      joinToken: signJoinTicket(vault.id, keyLookup),
       vaultName: vault.name,
       vaultType: vault.vault_type,
       recoveryConfigured: Boolean(body.recoveryEmail),

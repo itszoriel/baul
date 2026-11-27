@@ -22,7 +22,7 @@ import { TurnstileChallenge } from "@/components/TurnstileChallenge";
 import { Button, Field, cn } from "@/components/ui";
 import { COPY } from "@/lib/copy";
 import type { VaultPurpose, VaultType } from "@/lib/types";
-import { api, ApiRequestError } from "@/lib/vault-client";
+import { api, ApiRequestError, ensureAnonSession } from "@/lib/vault-client";
 
 /**
  * Vault creation wizard (spec §2.1): full-screen, one question per screen.
@@ -96,6 +96,9 @@ export default function CreatePage() {
     setBusy(true);
     setError(null);
     try {
+      // The server binds the new baul to this session so only its creator can
+      // become the first keeper.
+      await ensureAnonSession();
       const result = await api<Created>("/api/vaults", {
         name: name.trim(),
         maxMembers: size,

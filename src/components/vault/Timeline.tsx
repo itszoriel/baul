@@ -46,6 +46,8 @@ export function Timeline({
   onPlaySong,
   stickers,
   onStickerAdded,
+  hasOlder = false,
+  onLoadOlder,
 }: {
   memories: MemoryWithExtras[];
   members: Member[];
@@ -54,7 +56,11 @@ export function Timeline({
   onPlaySong: (songId: string) => void;
   stickers: VaultSticker[];
   onStickerAdded: (sticker: VaultSticker) => void;
+  /** More memories exist before the oldest one shown. */
+  hasOlder?: boolean;
+  onLoadOlder?: () => Promise<void>;
 }) {
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const memberById = useMemo(() => new Map(members.map((m) => [m.id, m])), [members]);
 
   if (memories.length === 0) {
@@ -133,6 +139,21 @@ export function Timeline({
           );
         })}
       </ol>
+      {hasOlder && onLoadOlder && (
+        <div className="flex justify-center pb-6 pt-8">
+          <button
+            type="button"
+            disabled={loadingOlder}
+            onClick={() => {
+              setLoadingOlder(true);
+              onLoadOlder().finally(() => setLoadingOlder(false));
+            }}
+            className="cursor-pointer rounded-full border border-brass/25 px-5 py-2 text-sm text-brass-2 transition hover:border-brass/50 disabled:cursor-wait disabled:opacity-60"
+          >
+            {loadingOlder ? "Opening older memories…" : "Show older memories"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

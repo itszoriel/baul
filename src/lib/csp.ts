@@ -42,15 +42,18 @@ export function buildContentSecurityPolicy({
     : nonce
       ? `style-src 'self' 'nonce-${nonce}'; style-src-attr 'unsafe-inline'`
       : "style-src 'self'; style-src-attr 'unsafe-inline'";
+  // Only this deployment's own Supabase project is reachable. A wildcard such
+  // as https://*.supabase.co would let injected script send data to any
+  // attacker-owned project.
   const directives = [
     "default-src 'self'",
     scriptSource,
     "script-src-attr 'none'",
     styleSource,
-    `img-src 'self' data: blob: https://*.supabase.co${storageSource} https://i.ytimg.com`,
+    `img-src 'self' data: blob:${storageSource} https://i.ytimg.com`,
     "font-src 'self' data:",
     `media-src 'self' blob: https:${storageSource}`,
-    `connect-src 'self'${development ? " ws:" : ""} https://*.supabase.co wss://*.supabase.co${storageSource}${realtimeSource} https://www.youtube.com https://challenges.cloudflare.com https://*.ingest.sentry.io https://*.ingest.us.sentry.io`,
+    `connect-src 'self'${development ? " ws:" : ""}${storageSource}${realtimeSource} https://www.youtube.com https://challenges.cloudflare.com https://*.ingest.sentry.io https://*.ingest.us.sentry.io`,
     "frame-src https://www.youtube.com https://www.youtube-nocookie.com https://challenges.cloudflare.com",
     "worker-src 'self' blob:",
     "manifest-src 'self'",

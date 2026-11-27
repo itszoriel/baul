@@ -33,6 +33,49 @@ export function webpDimensions(bytes: Uint8Array): { width: number; height: numb
   return null;
 }
 
+// Chunks a canvas-encoded still WebP can contain. EXIF/XMP (metadata such as
+// GPS), animation, and unknown chunks are refused rather than stored.
+const ALLOWED_CHUNKS = new Set(["VP8 ", "VP8L", "VP8X", "ALPH", "ICCP"]);
+
+export type WebpValidation =
+  | { ok: true; width: number; height: number }
+  | { ok: false; reason: "not_webp" | "malformed" | "metadata" | "unsupported_chunk" | "too_large" };
+
+/**
+ * Structural validation for uploaded WebP images. The browser re-encodes
+ * images before upload; this check makes the server enforce the result
+ * instead of trusting a client: exact RIFF length (no appended payload),
+ * well-formed chunks, no metadata chunks, and bounded pixel dimensions (a
+ * tiny file cannot decode into a huge bitmap on other keepers' devices).
+ */
+export function validateWebpImage(bytes: Uint8Array, maxDimension: number): WebpValidation {
+  if (bytes.length < 20 || ascii(bytes, 0, 4) !== "RIFF" || ascii(bytes, 8, 12) !== "WEBP") {
+    return { ok: false, reason: "not_webp" };
+  }
+  if (uint32le(bytes, 4) + 8 !== bytes.length) return { ok: false, reason: "malformed" };
+
+  let offset = 12;
+  while (offset < bytes.length) {
+    if (offset + 8 > bytes.length) return { ok: false, reason: "malformed" };
+    const fourcc = ascii(bytes, offset, offset + 4);
+    const size = uint32le(bytes, offset + 4);
+    const next = offset + 8 + size + (size % 2);
+    if (next > bytes.length) return { ok: false, reason: "malformed" };
+    if (fourcc === "EXIF" || fourcc === "XMP ") return { ok: false, reason: "metadata" };
+    if (!ALLOWED_CHUNKS.has(fourcc)) return { ok: false, reason: "unsupported_chunk" };
+    offset = next;
+  }
+
+  const dimensions = webpDimensions(bytes);
+  if (!dimensions || dimensions.width < 1 || dimensions.height < 1) return { ok: false, reason: "malformed" };
+  if (dimensions.width > maxDimension || dimensions.height > maxDimension) return { ok: false, reason: "too_large" };
+  return { ok: true, ...dimensions };
+}
+
+function uint32le(bytes: Uint8Array, offset: number): number {
+  return (uint24le(bytes, offset) + (bytes[offset + 3] ?? 0) * 0x1000000);
+}
+
 function ascii(bytes: Uint8Array, start: number, end: number): string {
   return String.fromCharCode(...bytes.slice(start, end));
 }

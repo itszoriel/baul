@@ -3,6 +3,7 @@ import "server-only";
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { memberRoleSchema, type ApiErrorCode } from "./domain";
+import { appUrl } from "./env";
 import { supabaseAdmin } from "./supabase/admin";
 import type { Member } from "./types";
 import { logOperationalEvent } from "./observability";
@@ -24,12 +25,19 @@ export function jsonError(status: number, error: string, extra?: Record<string, 
   );
 }
 
-/** Cookie-authenticated mutations must originate from this application. */
+/**
+ * Cookie-authenticated mutations must originate from this application: the
+ * request's own origin, or the configured canonical origin (NEXT_PUBLIC_APP_URL).
+ * The canonical origin matters because the URL a server reconstructs is not
+ * always the one the browser used (Next.js reports a 127.0.0.1-bound server
+ * as `localhost`; proxies can rewrite the host).
+ */
 export function isSameOrigin(req: Request): boolean {
   const origin = req.headers.get("origin");
   if (origin) {
     try {
-      return new URL(origin).origin === new URL(req.url).origin;
+      const requestOrigin = new URL(origin).origin;
+      return requestOrigin === new URL(req.url).origin || requestOrigin === new URL(appUrl()).origin;
     } catch {
       return false;
     }

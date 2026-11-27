@@ -16,6 +16,10 @@ export function logOperationalEvent(event: string, fields: Record<string, string
   const safeFields = Object.fromEntries(Object.entries(fields).filter(([name]) => !FORBIDDEN_FIELD.test(name)));
   console.info(JSON.stringify({ event, at: new Date().toISOString(), ...safeFields }));
   if (ALERT_EVENTS.has(event)) {
-    Sentry.captureMessage(event, { level: "error", extra: safeFields });
+    // Tags, not `extra`: scrubSentryEvent deletes `extra` wholesale, which
+    // previously left every alert without its status, code, or request id.
+    // The fields are already filtered above and are short scalars.
+    const tags = Object.fromEntries(Object.entries(safeFields).map(([name, value]) => [name, String(value)]));
+    Sentry.captureMessage(event, { level: "error", tags });
   }
 }

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { isSameOrigin, jsonError, loadMember } from "@/lib/api";
+import { isSameOrigin, jsonError } from "@/lib/api";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { requireVaultSession } from "@/lib/supabase/server";
+import { requireMember } from "@/lib/authz";
 
 const Body = z.object({ memberId: z.uuid(), vaultId: z.uuid() });
 
@@ -11,14 +11,12 @@ export async function POST(req: NextRequest) {
   if (!isSameOrigin(req)) return jsonError(403, "Request origin was not accepted.");
   const parsed = Body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return jsonError(400, "Invalid request.");
-  const session = await requireVaultSession(parsed.data.vaultId);
-  if (!session.ok) return jsonError(session.status, session.error);
-
-  const caller = await loadMember(session.claims.vaultId, session.claims.memberId);
-  if (!caller || caller.role !== "admin") return jsonError(403, "Only an admin keeper can remove members.");
+  const access = await requireMember(parsed.data.vaultId, { admin: true, forbidden: "Only an admin keeper can remove members." });
+  if (!access.ok) return access.response;
+  const caller = access.member;
 
   const { error } = await supabaseAdmin().rpc("revoke_vault_member", {
-    p_vault_id: session.claims.vaultId,
+    p_vault_id: caller.vault_id,
     p_actor_member_id: caller.id,
     p_subject_member_id: parsed.data.memberId,
   });

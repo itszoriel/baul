@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { jsonError } from "@/lib/api";
+import { secretsMatch } from "@/lib/crypto";
 import { logOperationalEvent } from "@/lib/observability";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
+/**
+ * Manual fallback for the storage cleanup worker. The scheduled worker is the
+ * Supabase Edge Function `storage-cleanup` (pg_cron, every 15 minutes).
+ */
 export async function GET(req: NextRequest) {
   const secret = process.env.CRON_SECRET;
   if (!secret) return jsonError(500, "Cron is not configured.");
-  if (req.headers.get("authorization") !== `Bearer ${secret}`) return jsonError(401, "Unauthorized.");
+  if (!secretsMatch(req.headers.get("authorization"), `Bearer ${secret}`)) return jsonError(401, "Unauthorized.");
 
   const admin = supabaseAdmin();
   const { data: jobs, error } = await admin

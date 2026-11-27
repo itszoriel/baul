@@ -1,11 +1,13 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(83);
+select plan(94);
 
 -- Keep the transaction-safe suite runnable against a populated staging or
 -- hosted project as well as a clean local stack.
 create temporary table _baul_test_baseline as
-select count(*)::integer as vault_count from public.vaults;
+select count(*)::integer as vault_count
+from public.vaults v
+where exists (select 1 from public.members m where m.vault_id = v.id);
 
 insert into public.vaults (id, name, key_hash, key_lookup, vault_type, purpose, max_members)
 values
@@ -254,6 +256,24 @@ select throws_ok(
   '22023', null, 'the rate limiter rejects invalid configuration'
 );
 
+update public.vaults
+set recovery_email_hash = repeat('9', 64), recovery_email_confirmed_at = null
+where id = '20000000-0000-0000-0000-000000000002';
+insert into public.vault_recovery_requests (vault_id, token_hash, expires_at)
+values
+  ('20000000-0000-0000-0000-000000000002', repeat('7', 64), now() + interval '30 minutes'),
+  ('20000000-0000-0000-0000-000000000002', repeat('8', 64), now() + interval '30 minutes');
+select throws_ok(
+  $$select public.confirm_vault_recovery(repeat('7', 64), 'new-hash', repeat('c', 64))$$,
+  'P0001', 'recovery_unavailable', 'recovery cannot rotate the key for an unconfirmed email'
+);
+update public.vaults set recovery_email_confirmed_at = now()
+where id = '20000000-0000-0000-0000-000000000002';
+select ok(
+  (select count(*) = 1 from public.confirm_vault_recovery(repeat('8', 64), 'new-hash', repeat('c', 64))),
+  'recovery rotates the key once the recovery email is confirmed'
+);
+
 insert into public.vault_invites (vault_id, token_hash, created_by, expires_at)
 values (
   '10000000-0000-0000-0000-000000000001',
@@ -348,14 +368,84 @@ insert into public.vaults (
     'circle', 'friends', 3, '30000000-0000-0000-0000-000000000001',
     '32000000-0000-0000-0000-000000000001'
   );
+-- Public statistics count only vaults that have at least one keeper.
+select public.refresh_region_stats();
+select is((select vault_count from public.country_stats where iso3 = 'ZXX'), 1, 'memberless vaults never appear in public statistics');
+insert into public.members (vault_id, user_id, display_name, avatar_color, role)
+values
+  ('30000000-0000-0000-0000-000000000003', 'eeeeeeee-0000-0000-0000-000000000031', 'T', '#AABBCC', 'admin'),
+  ('40000000-0000-0000-0000-000000000004', 'eeeeeeee-0000-0000-0000-000000000041', 'F', '#AABBCC', 'admin');
 select public.refresh_region_stats();
 select is((select vault_count from public.country_stats where iso3 = 'ZXX'), 3, 'country aggregate appears at the privacy threshold');
 select is((select vault_count from public.region_stats where division_id = '32000000-0000-0000-0000-000000000001'), 3, 'division aggregate appears at the privacy threshold');
 select is(
   (select vault_count from public.country_stats where iso3 = 'WLD'),
-  (select vault_count + 4 from _baul_test_baseline),
+  -- 'Second' lost its only keeper in the cascade test above, so it no longer
+  -- counts; First, Third and Fourth do.
+  (select vault_count + 3 from _baul_test_baseline),
   'world total remains exact without exposing a location'
 );
+
+-- Creator binding: only the creating session can become the first keeper.
+insert into public.vaults (id, name, key_hash, key_lookup, vault_type, purpose, max_members, created_by_user_id)
+values ('50000000-0000-0000-0000-000000000005', 'Fifth', 'hash', repeat('5', 64), 'circle', 'friends', 3,
+  'ffffffff-0000-0000-0000-000000000051');
+select throws_ok(
+  $$select public.join_vault_member('50000000-0000-0000-0000-000000000005', 'ffffffff-0000-0000-0000-000000000052', 'Early', '#AABBCC', 'hash')$$,
+  'P0001', 'vault_not_ready', 'someone holding the key cannot become admin before the creator joins'
+);
+select is(
+  (select member_role from public.join_vault_member('50000000-0000-0000-0000-000000000005', 'ffffffff-0000-0000-0000-000000000051', 'Creator', '#AABBCC', 'hash')),
+  'admin', 'the creator becomes the first admin keeper'
+);
+select is(
+  (select member_role from public.join_vault_member('50000000-0000-0000-0000-000000000005', 'ffffffff-0000-0000-0000-000000000052', 'Later', '#BBCCDD', 'hash')),
+  'member', 'others join as members once the creator is inside'
+);
+
+-- Retention: abandoned memberless vaults are purged after 24 hours.
+insert into public.vaults (id, name, key_hash, key_lookup, vault_type, purpose, max_members, created_at)
+values
+  ('60000000-0000-0000-0000-000000000006', 'Abandoned', 'hash', repeat('6', 64), 'circle', 'friends', 3, now() - interval '2 days'),
+  ('70000000-0000-0000-0000-000000000007', 'Just made', 'hash', repeat('7', 64), 'circle', 'friends', 3, now());
+select private.purge_expired_records();
+select ok(not exists (select 1 from public.vaults where id = '60000000-0000-0000-0000-000000000006'), 'abandoned memberless vaults are purged');
+select ok(exists (select 1 from public.vaults where id = '70000000-0000-0000-0000-000000000007'), 'a freshly created vault waits for its creator');
+select ok(exists (select 1 from public.vaults where id = '10000000-0000-0000-0000-000000000001'), 'vaults with keepers are never purged');
+
+-- Atomic per-vault photo limit.
+insert into public.members (id, vault_id, user_id, display_name, avatar_color, role)
+values ('22000000-0000-0000-0000-000000000022', '20000000-0000-0000-0000-000000000002',
+  'cccccccc-0000-0000-0000-000000000033', 'P', '#AABBCC', 'admin');
+select throws_ok(
+  $sql$do $photos$
+  begin
+    for i in 1..251 loop
+      insert into public.memories (vault_id, member_id, kind, media_url)
+      values ('20000000-0000-0000-0000-000000000002', '22000000-0000-0000-0000-000000000022', 'photo',
+        'photos/20000000-0000-0000-0000-000000000002/' || gen_random_uuid() || '.webp');
+    end loop;
+  end
+  $photos$$sql$,
+  'P0001', 'photo_limit_reached', 'a Baul cannot exceed its photo limit, even under concurrency'
+);
+
+-- Per-member quotas on browser inserts.
+update public.members set revoked_at = null where id = '11000000-0000-0000-0000-000000000001';
+select set_config('request.jwt.claims', '{"sub":"aaaaaaaa-0000-0000-0000-000000000001","role":"authenticated"}', true);
+set local role authenticated;
+select throws_ok(
+  $sql$do $flood$
+  begin
+    for i in 1..31 loop
+      insert into public.messages (vault_id, member_id, body)
+      values ('10000000-0000-0000-0000-000000000001', '11000000-0000-0000-0000-000000000001', 'flood ' || i);
+    end loop;
+  end
+  $flood$$sql$,
+  'P0001', 'write_rate_limited', 'a keeper cannot flood a Baul with browser inserts'
+);
+reset role;
 
 select is(
   (

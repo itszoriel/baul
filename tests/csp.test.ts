@@ -38,9 +38,19 @@ describe("content security policy", () => {
       supabaseUrl: "http://127.0.0.1:54321",
     });
     expect(policy).not.toContain("upgrade-insecure-requests");
-    expect(policy).toContain("connect-src 'self' https://*.supabase.co wss://*.supabase.co http://127.0.0.1:54321 ws://127.0.0.1:54321");
-    expect(policy).toContain("img-src 'self' data: blob: https://*.supabase.co http://127.0.0.1:54321");
+    expect(policy).toContain("connect-src 'self' http://127.0.0.1:54321 ws://127.0.0.1:54321");
+    expect(policy).toContain("img-src 'self' data: blob: http://127.0.0.1:54321");
     expect(policy).toContain("media-src 'self' blob: https: http://127.0.0.1:54321");
+  });
+
+  it("allows only the configured Supabase project, never every supabase.co project", () => {
+    const policy = buildContentSecurityPolicy({
+      development: false,
+      supabaseUrl: "https://abcdefghijklmnop.supabase.co",
+    });
+    expect(policy).not.toContain("*.supabase.co");
+    expect(policy).toContain("https://abcdefghijklmnop.supabase.co");
+    expect(policy).toContain("wss://abcdefghijklmnop.supabase.co");
   });
 
   it("does not broaden the policy for an insecure remote Supabase URL", () => {

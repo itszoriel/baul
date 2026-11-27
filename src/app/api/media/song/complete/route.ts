@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isSameOrigin, jsonError, loadMember } from "@/lib/api";
+import { isSameOrigin, jsonError } from "@/lib/api";
+import { requireMember } from "@/lib/authz";
 import { LIMITS, songUploadCompletionSchema } from "@/lib/domain";
 import { isMp3, totalObjectBytes } from "@/lib/media";
 import { logOperationalEvent } from "@/lib/observability";
 import { rateLimit } from "@/lib/rate-limit";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { requireVaultSession } from "@/lib/supabase/server";
 
 export async function POST(req: NextRequest) {
   if (!isSameOrigin(req)) return jsonError(403, "Request origin was not accepted.");
@@ -21,16 +21,14 @@ export async function POST(req: NextRequest) {
   if (intentError) return jsonError(500, "Could not verify the upload. Try again.");
   if (!intent) return jsonError(404, "That upload is no longer available.");
 
-  const session = await requireVaultSession(intent.vault_id);
-  if (!session.ok) return jsonError(session.status, session.error);
-  const member = await loadMember(intent.vault_id, session.claims.memberId);
-  if (!member || member.id !== intent.member_id) return jsonError(403, "This upload belongs to another keeper.");
+  const access = await requireMember(intent.vault_id);
+  if (!access.ok) return access.response;
+  const member = access.member;
+  if (member.id !== intent.member_id) return jsonError(403, "This upload belongs to another keeper.");
 
   const limit = await rateLimit(req, {
     name: "song-upload-complete",
-    max: 30,
-    windowMs: 60 * 60_000,
-    identifier: member.id,
+    identifier: { value: member.id, max: 30, windowMs: 60 * 60_000 },
   }).catch(() => null);
   if (!limit?.ok) {
     return jsonError(429, "Too many upload checks were requested. Try again later.", {

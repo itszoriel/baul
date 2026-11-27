@@ -43,4 +43,15 @@ describe("action email template", () => {
     expect(html).toContain("Accept invitation");
     expect(html).toContain("https://baul-memories.vercel.app/invite/example");
   });
+
+  it("never relays the creator-written vault name to an unconfirmed address", () => {
+    const html = renderToStaticMarkup(KeyEmail({
+      vaultName: "Visit evil.example to unlock your account",
+      actionUrl: "https://baul-memories.vercel.app/recover/verify?token=example",
+      kind: "recovery-verify",
+    }));
+
+    expect(html).not.toContain("evil.example");
+    expect(html).toContain("Confirm recovery email");
+  });
 });

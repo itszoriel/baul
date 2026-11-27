@@ -1,13 +1,13 @@
 import { randomBytes } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { isSameOrigin, jsonError, loadMember } from "@/lib/api";
+import { isSameOrigin, jsonError } from "@/lib/api";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { requireVaultSession } from "@/lib/supabase/server";
+import { requireMember } from "@/lib/authz";
 import type { Database } from "@/lib/database.types";
 
 const Body = z.object({
-  memberId: z.string().uuid(),
+  memberId: z.uuid(),
   vaultId: z.uuid(),
   resetName: z.boolean().default(false),
   resetAvatar: z.boolean().default(false),
@@ -20,30 +20,30 @@ export async function POST(req: NextRequest) {
   if (!parsed.success || (!parsed.data.resetName && !parsed.data.resetAvatar)) {
     return jsonError(400, "Invalid request.");
   }
-  const session = await requireVaultSession(parsed.data.vaultId);
-  if (!session.ok) return jsonError(session.status, session.error);
-  const caller = await loadMember(session.claims.vaultId, session.claims.memberId);
-  if (!caller || caller.role !== "admin") return jsonError(403, "Only an admin keeper can reset members.");
+  const access = await requireMember(parsed.data.vaultId, { admin: true, forbidden: "Only an admin keeper can reset members." });
+  if (!access.ok) return access.response;
+  const caller = access.member;
 
   const admin = supabaseAdmin();
   const { data: target } = await admin
     .from("members")
     .select("id")
     .eq("id", parsed.data.memberId)
-    .eq("vault_id", session.claims.vaultId)
+    .eq("vault_id", caller.vault_id)
     .maybeSingle();
   if (!target) return jsonError(404, "That member isn't in this baul.");
 
   const updates: Database["public"]["Tables"]["members"]["Update"] = {};
   if (parsed.data.resetName) {
-    updates.display_name = `Member-${randomBytes(2).toString("hex")}`;
+    // 32 random bits: a collision with the per-vault unique name is negligible.
+    updates.display_name = `Member-${randomBytes(4).toString("hex")}`;
     updates.name_changed_at = new Date().toISOString();
   }
   if (parsed.data.resetAvatar) {
     updates.avatar_url = null;
     await admin.from("storage_cleanup_queue").insert({
       bucket: "avatars",
-      object_key: `${session.claims.vaultId}/${target.id}.webp`,
+      object_key: `${caller.vault_id}/${target.id}.webp`,
     });
   }
 

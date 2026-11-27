@@ -1,6 +1,12 @@
 import type { NextConfig } from "next";
 import { networkInterfaces } from "node:os";
 import { withSentryConfig } from "@sentry/nextjs/config";
+import { remoteDatabaseViolation } from "./src/lib/remote-database-guard";
+
+// Next loads .env files before this config, so this stops dev, local builds,
+// and Playwright runs before they can touch the hosted project.
+const databaseViolation = remoteDatabaseViolation(process.env);
+if (databaseViolation) throw new Error(databaseViolation);
 
 const lanDevelopmentOrigins = Object.values(networkInterfaces())
   .flatMap((addresses) => addresses ?? [])

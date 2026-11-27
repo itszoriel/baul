@@ -15,9 +15,8 @@ export async function POST(req: NextRequest) {
   const digest = tokenHash(parsed.data.token);
   const limit = await rateLimit(req, {
     name: "recovery-confirm",
-    max: 5,
-    windowMs: 30 * 60_000,
-    identifier: digest,
+    ip: { max: 10, windowMs: 30 * 60_000 },
+    challenge: true,
     turnstileToken: parsed.data.turnstileToken,
   }).catch(() => null);
   if (!limit?.ok) return jsonError(429, "Please complete the security check.", {
